@@ -149,55 +149,55 @@ void drive() {
     // node pointer
     ros::NodeHandlePtr n = boost::make_shared<ros::NodeHandle>();
     // publisher for sending move commands to gazebo
-	ros::Publisher drive_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
+    ros::Publisher drive_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
 
     // the move to be published: STRAIGHT ONLY
-	geometry_msgs::Twist move_cmd;
-	move_cmd.linear.x = SPEED;
-	move_cmd.linear.y = 0;
-	move_cmd.angular.z = 0;
-	
-	// run at 5Hz
-	ros::Rate loop_rate(5);
+    geometry_msgs::Twist move_cmd;
+    move_cmd.linear.x = SPEED;
+    move_cmd.linear.y = 0;
+    move_cmd.angular.z = 0;
+    
+    // run at 5Hz
+    ros::Rate loop_rate(5);
     
     // enters loop until ros quits
-	while (ros::ok()) {
-		double start_time = ros::Time::now().toSec();
-		double current_distance = 0;		
-		// publishes command for moving 1 meter at a time
-		while (ros::ok() && canDrive && current_distance < 1) {
-			drive_pub.publish(move_cmd);
-			ros::spinOnce();
-			// calulate approximate distance traveled
-			current_distance = SPEED * (ros::Time::now().toSec() - start_time);
-			loop_rate.sleep();
-		}
-		// update distance traveled
-		distance_counter += distance_counter;
-		loop_rate.sleep();
-	}
+    while (ros::ok()) {
+        double start_time = ros::Time::now().toSec();
+        double current_distance = 0;        
+        // publishes command for moving 1 meter at a time
+        while (ros::ok() && canDrive && current_distance < 1) {
+            drive_pub.publish(move_cmd);
+            ros::spinOnce();
+            // calulate approximate distance traveled
+            current_distance = SPEED * (ros::Time::now().toSec() - start_time);
+            loop_rate.sleep();
+        }
+        // update distance traveled
+        distance_counter += distance_counter;
+        loop_rate.sleep();
+    }
 }
 
 /**
  * Initiates the node and begins our turtlebot's journey into the unknown
  */
 int main (int argc, char **argv) {
-	ros::init(argc, argv, "explore");
-	ros::NodeHandle n;
-	// start threads
+    ros::init(argc, argv, "explore");
+    ros::NodeHandle n;
+    // start threads
     boost::thread hault_thread(hault);
     boost::thread keyboard_thread(keyboard);
-	boost::thread turn_thread(turn);
-	boost::thread drive_thread(drive);
-	//detach threads
+    boost::thread turn_thread(turn);
+    boost::thread drive_thread(drive);
+    //detach threads
     hault_thread.detach();
     keyboard_thread.detach();
-	turn_thread.detach();
-	drive_thread.detach();
-	// wait until program is terminated
-	ros::Rate loop_rate(1);
-	while (ros::ok()) {
+    turn_thread.detach();
+    drive_thread.detach();
+    // wait until program is terminated
+    ros::Rate loop_rate(1);
+    while (ros::ok()) {
         loop_rate.sleep();
     }
-	return 0;
+    return 0;
 }
