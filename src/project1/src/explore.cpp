@@ -29,9 +29,11 @@ void turn() {
     
     // the move to be published: TURN ONLY
     geometry_msgs::Twist turn_cmd;
-    double angular_vel = TURN_ANGLE;    
+    // should take two seconds to turn
+    double angular_vel = TURN_ANGLE / 2;    
     turn_cmd.linear.x = 0;
-    turn_cmd.linear.y = 0;    
+    turn_cmd.linear.y = 0; 
+    // randomly determine which direction to turn   
     turn_cmd.angular.z = (rand() % 2) ? angular_vel : -1 * angular_vel;
     
     // run at 5Hz
@@ -110,6 +112,8 @@ int main (int argc, char **argv) {
 	drive_thread.detach();
 	// wait until program is terminated
 	ros::Rate loop_rate(1);
-	while (ros::ok());
+	while (ros::ok()) {
+	    loop_rate.sleep();
+	}
 	return 0;
 }
