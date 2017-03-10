@@ -9,6 +9,7 @@ project(project1)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
+  kobuki_msgs
   rospy
   roscpp
   std_msgs
@@ -73,6 +74,7 @@ find_package(catkin REQUIRED COMPONENTS
 generate_messages(
    DEPENDENCIES
    geometry_msgs
+   kobuki_msgs
    std_msgs
 )
 
@@ -108,7 +110,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES project1
-  CATKIN_DEPENDS geometry_msgs rospy roscpp std_msgs message_runtime
+  CATKIN_DEPENDS geometry_msgs kobuki_msgs rospy roscpp std_msgs message_runtime
 #  DEPENDS system_lib
 )
 

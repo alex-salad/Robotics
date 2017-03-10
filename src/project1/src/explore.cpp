@@ -2,6 +2,7 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include "geometry_msgs/Twist.h"
+#include "kobuki_msg/BumberEvent"
 #include <math.h>
 #include <boost/thread/thread.hpp>
 
@@ -16,6 +17,80 @@ bool canEscape = true;
 bool canAvoid = true;
 bool canTurn = true;
 bool canDrive = true;
+int cooldown = 0;
+
+/*
+* Deas with the bumber feedback from gazebo
+*/
+void haultCallback(const kobuki_msg::BumberEvent:ConstPtr& msg) {
+    if (msg->state === BumberEvent.PRESSED) {
+        canEscape = false;
+        canAvoid = false;
+        canTurn = false;
+        canDrive = false;
+    } else if (msg->state == BumberEvent.RELEASED) {
+        canEscape = true;
+        canAvoid = true;
+        canTurn = true;
+        canDrive = true;        
+    }
+}
+
+/*
+* Listens to bumbers of turtlebot
+*/
+void hault() {
+    // node pointer
+    ros::NodeHandlePtr n = boost::make_shared<ros::NodeHandle>();
+    // subscribe to teleop publish command
+    ros::Subscriber sub = n.subscribe("mobile_base/events/bumber", 2, keyboardCallback);
+    // spin away
+    ros::spin();
+}
+
+/**
+* Deals with the keyboard commands from teleop keyboard
+*/
+void keyboardCallback(const geometry_msgs::Twist::ConstPtr& msg) {
+    // get the distance traveled
+    double deltaX = msg->linear.x;
+
+    // increment cooldown counter
+    cooldown++;
+    // disable other functions
+    canEscape = false;
+    canAvoid = false;
+    canTurn = false;
+    canDrive = false;
+
+    // sleep for 1 second
+    ros::Duration(1.0).sleep();
+
+    // decrement cooldown counter
+    cooldown--;
+    // update distance travelled
+    distance_counter += deltaX;
+
+    // return functionality if applicable
+    if (cooldown == 0) {
+        canEscape = true;
+        canAvoid = true;
+        canTurn = true;
+        canDrive = true;
+    }
+}
+
+/**
+* Listens to commands from teleop keyboard
+*/
+void keyboard() {
+    // node pointer
+    ros::NodeHandlePtr n = boost::make_shared<ros::NodeHandle>();
+    // subscribe to teleop publish command
+    ros::Subscriber sub = n.subscribe("turtlebot_telop_keyboard/cmd_vel", 5, keyboardCallback);
+    // spin away
+    ros::spin();
+}
 
 /**
 * Publishes commands for rotating 15 degrees in a random direction.
@@ -41,9 +116,14 @@ void turn() {
     
     while (ros::ok()) {
         double start_time = ros::Time::now().toSec();
-        
-        // turn after 1 meter has been traveled
-        if (distance_counter >= 1) {
+        // makes sure driving is enabled when turning is enabled
+        if (!canTurn) {
+            canDrive = false;
+        } else if (!canDrive) {
+            canDrive = true;
+        }    
+        // turn after 1 meter has been traveled and turns off driving while turning
+        if (distance_counter >= 1 && canTurn) {
             canDrive = false;
             double current_angle = 0;
             double start_time = ros::Time::now().toSec();
@@ -105,15 +185,19 @@ int main (int argc, char **argv) {
 	ros::init(argc, argv, "explore");
 	ros::NodeHandle n;
 	// start threads
+    boost::thread hault_thread(hault);
+    boost::thread keyboard_thread(keyboard);
 	boost::thread turn_thread(turn);
 	boost::thread drive_thread(drive);
 	//detach threads
+    hault_thread.detach();
+    keyboard_thread.detach();
 	turn_thread.detach();
 	drive_thread.detach();
 	// wait until program is terminated
 	ros::Rate loop_rate(1);
 	while (ros::ok()) {
-	    loop_rate.sleep();
-	}
+        loop_rate.sleep();
+    }
 	return 0;
 }
