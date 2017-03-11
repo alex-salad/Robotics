@@ -131,6 +131,7 @@ void turn() {
             // publish command for turning
             while (ros::ok() && canTurn && current_angle < TURN_ANGLE) {
                 turn_pub.publish(turn_cmd);
+                ros::spinOnce();
                 current_angle =  angular_vel * ((ros::Time::now().toSec()) - start_time);
                 loop_rate.sleep();
             }
@@ -171,6 +172,7 @@ void drive() {
         while (ros::ok() && canDrive && current_distance < 1) {
             drive_pub.publish(move_cmd);
             // calulate approximate distance traveled
+            ros::spinOnce();
             current_distance = SPEED * (ros::Time::now().toSec() - start_time);
             loop_rate.sleep();
         }
@@ -190,7 +192,6 @@ void drive() {
 int main (int argc, char **argv) {
     ros::init(argc, argv, "explore");
     ros::NodeHandle n;
-    ros::MultiThreadedSpinner spinner(0);
     // create subscibers
     ros::Subscriber hault_sub = n.subscribe("mobile_base/events/bumper", 10, hault);
     // start threads
@@ -200,6 +201,6 @@ int main (int argc, char **argv) {
     turn_thread.detach();
     drive_thread.detach();
     // spin away
-    spinner.spin();
+    ross::spin();
     return 0;
 }
