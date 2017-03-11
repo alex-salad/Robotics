@@ -3,7 +3,7 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include "geometry_msgs/Twist.h"
-#include "kobuki_msg/BumberEvent"
+#include "kobuki_msgs/BumberEvent"
 #include <math.h>
 #include <boost/thread/thread.hpp>
 
@@ -23,21 +23,21 @@ bool canDrive = true;
 int cooldown = 0;
 
 // ========================================================
-// BEGIN HAULT FEATURE
+// HAULT FEATURE
 // ========================================================
 /*
 * Handles bumber events
 */
-void haultCallback(const kobuki_msg::BumberEvent::ConstPtr& msg) {
+void haultCallback(const kobuki_msgs::BumberEvent::ConstPtr& msg) {
     // turn off other featurs when collision detected
-    if (msg->state == kobuki_msg::BumberEvent.PRESSED) {
+    if (msg->state == kobuki_msgs::BumberEvent.PRESSED) {
         canEscape = false;
         canAvoid = false;
         canTurn = false;
         canDrive = false;
     } 
     // reenable features when free again
-    else if (msg->state == kobuki_msg::BumberEvent.RELEASED) {
+    else if (msg->state == kobuki_msgs::BumberEvent.RELEASED) {
         canEscape = true;
         canAvoid = true;
         canTurn = true;
