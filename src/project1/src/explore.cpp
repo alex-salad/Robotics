@@ -3,7 +3,7 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include "geometry_msgs/Twist.h"
-#include "kobuki_msgs/BumberEvent"
+#include "kobuki_msgs/BumperEvent.h"
 #include <math.h>
 #include <boost/thread/thread.hpp>
 
@@ -21,6 +21,7 @@ bool canAvoid = true;
 bool canTurn = true;
 bool canDrive = true;
 int cooldown = 0;
+int bumperStates[3];
 
 // ========================================================
 // HAULT FEATURE
@@ -28,33 +29,36 @@ int cooldown = 0;
 /*
 * Handles bumber events
 */
-void haultCallback(const kobuki_msgs::BumberEvent::ConstPtr& msg) {
-    // turn off other featurs when collision detected
-    if (msg->state == kobuki_msgs::BumberEvent.PRESSED) {
+void hault(const kobuki_msgs::BumperEvent::ConstPtr& msg) {
+    // turn off other featurs when collision detected and update bumper states
+    if (msg->state == kobuki_msgs::BumperEvent::PRESSED) {
+        // node pointer
+        ros::NodeHandlePtr n = boost::make_shared<ros::NodeHandle>();
+        // publisher for sending move commands to gazebo
+        ros::Publisher stop_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 10);
+        // publish stop command
+        geometry_msgs::Twist stop_cmd;
+        stop_cmd.linear.x = 0;
+        stop_cmd.linear.y = 0;
+        stop_cmd.angular.z = 0;
+        stop_pub.publish(stop_cmd);
+
+        // update bumper state
+        bumperStates[msg->bumper] == kobuki_msgs::BumperEvent::PRESSED;
+        // disable features
         canEscape = false;
         canAvoid = false;
         canTurn = false;
         canDrive = false;
     } 
+
     // reenable features when free again
-    else if (msg->state == kobuki_msgs::BumberEvent.RELEASED) {
+    if (bumperStates[0] + bumperStates[1] + bumperStates[2] == kobuki_msgs::BumperEvent::RELEASED) {
         canEscape = true;
         canAvoid = true;
         canTurn = true;
         canDrive = true;        
     }
-}
-
-/*
-* Listens to bumber events
-*/
-void hault() {
-    // node pointer
-    ros::NodeHandlePtr n = boost::make_shared<ros::NodeHandle>();
-    // subscribe to teleop publish command
-    ros::Subscriber sub = n.subscribe("mobile_base/events/bumber", 2, keyboardCallback);
-    // spin away
-    ros::spin();
 }
 
 // ========================================================
@@ -63,7 +67,7 @@ void hault() {
 /**
 * Deals with the keyboard commands from teleop keyboard
 */
-void keyboardCallback(const geometry_msgs::Twist::ConstPtr& msg) {
+void keyboard(const geometry_msgs::Twist::ConstPtr& msg) {
     // get the distance traveled
     double deltaX = msg->linear.x;
 
@@ -84,24 +88,12 @@ void keyboardCallback(const geometry_msgs::Twist::ConstPtr& msg) {
     distance_counter += deltaX;
 
     // return functionality if applicable
-    if (cooldown == 0) {
+    if (cooldown == 0 && keyboard) {
         canEscape = true;
         canAvoid = true;
         canTurn = true;
         canDrive = true;
     }
-}
-
-/**
-* Listens to keyboard commands from teleop keyboard
-*/
-void keyboard() {
-    // node pointer
-    ros::NodeHandlePtr n = boost::make_shared<ros::NodeHandle>();
-    // subscribe to teleop publish command
-    ros::Subscriber sub = n.subscribe("turtlebot_telop_keyboard/cmd_vel", 5, keyboardCallback);
-    // spin away
-    ros::spin();
 }
 
 // ========================================================
@@ -115,7 +107,7 @@ void turn() {
     // node pointer
     ros::NodeHandlePtr n = boost::make_shared<ros::NodeHandle>();
     // publisher for sending move commands to gazebo
-    ros::Publisher turn_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
+    ros::Publisher turn_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 10);
     
     // the move to be published: TURN ONLY
     geometry_msgs::Twist turn_cmd;
@@ -126,17 +118,11 @@ void turn() {
     // randomly determine which direction to turn   
     turn_cmd.angular.z = (rand() % 2) ? angular_vel : -1 * angular_vel;
     
-    // run at 5Hz
-    ros::Rate loop_rate(5);
+    // run at 10Hz
+    ros::Rate loop_rate(10);
     
     while (ros::ok()) {
         double start_time = ros::Time::now().toSec();
-        // makes sure driving is enabled when turning is enabled
-        if (!canTurn) {
-            canDrive = false;
-        } else if (!canDrive) {
-            canDrive = true;
-        }    
         // turn after 1 meter has been traveled and turns off driving while turning
         if (distance_counter >= 1 && canTurn) {
             canDrive = false;
@@ -145,7 +131,6 @@ void turn() {
             // publish command for turning
             while (ros::ok() && canTurn && current_angle < TURN_ANGLE) {
                 turn_pub.publish(turn_cmd);
-                ros::spinOnce();
                 current_angle =  angular_vel * ((ros::Time::now().toSec()) - start_time);
                 loop_rate.sleep();
             }
@@ -167,7 +152,7 @@ void drive() {
     // node pointer
     ros::NodeHandlePtr n = boost::make_shared<ros::NodeHandle>();
     // publisher for sending move commands to gazebo
-    ros::Publisher drive_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
+    ros::Publisher drive_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 10);
 
     // the move to be published: STRAIGHT ONLY
     geometry_msgs::Twist move_cmd;
@@ -176,7 +161,7 @@ void drive() {
     move_cmd.angular.z = 0;
     
     // run at 5Hz
-    ros::Rate loop_rate(5);
+    ros::Rate loop_rate(10);
     
     // enters loop until ros quits
     while (ros::ok()) {
@@ -185,7 +170,6 @@ void drive() {
         // publishes command for moving 1 meter at a time
         while (ros::ok() && canDrive && current_distance < 1) {
             drive_pub.publish(move_cmd);
-            ros::spinOnce();
             // calulate approximate distance traveled
             current_distance = SPEED * (ros::Time::now().toSec() - start_time);
             loop_rate.sleep();
@@ -206,20 +190,16 @@ void drive() {
 int main (int argc, char **argv) {
     ros::init(argc, argv, "explore");
     ros::NodeHandle n;
+    ros::MultiThreadedSpinner spinner(0);
+    // create subscibers
+    ros::Subscriber hault_sub = n.subscribe("mobile_base/events/bumper", 10, hault);
     // start threads
-    boost::thread hault_thread(hault);
-    boost::thread keyboard_thread(keyboard);
     boost::thread turn_thread(turn);
     boost::thread drive_thread(drive);
     //detach threads
-    hault_thread.detach();
-    keyboard_thread.detach();
     turn_thread.detach();
     drive_thread.detach();
-    // wait until program is terminated
-    ros::Rate loop_rate(1);
-    while (ros::ok()) {
-        loop_rate.sleep();
-    }
+    // spin away
+    spinner.spin();
     return 0;
 }
