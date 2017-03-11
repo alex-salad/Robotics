@@ -1,4 +1,5 @@
-// imports =================================
+// imports
+// --------------------------------------------------------
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include "geometry_msgs/Twist.h"
@@ -6,11 +7,13 @@
 #include <math.h>
 #include <boost/thread/thread.hpp>
 
-// constants ===============================
+// constants
+// --------------------------------------------------------
 #define TURN_ANGLE M_PI / 12
 #define SPEED 0.2
 
-// global variable
+// global variables
+// --------------------------------------------------------
 double distance_counter = 0;
 bool canKeyboard = true;
 bool canEscape = true;
@@ -19,16 +22,22 @@ bool canTurn = true;
 bool canDrive = true;
 int cooldown = 0;
 
+// ========================================================
+// BEGIN HAULT FEATURE
+// ========================================================
 /*
-* Deas with the bumber feedback from gazebo
+* Handles bumber events
 */
-void haultCallback(const kobuki_msg::BumberEvent:ConstPtr& msg) {
-    if (msg->state === BumberEvent.PRESSED) {
+void haultCallback(const kobuki_msg::BumberEvent::ConstPtr& msg) {
+    // turn off other featurs when collision detected
+    if (msg->state == kobuki_msg::BumberEvent.PRESSED) {
         canEscape = false;
         canAvoid = false;
         canTurn = false;
         canDrive = false;
-    } else if (msg->state == BumberEvent.RELEASED) {
+    } 
+    // reenable features when free again
+    else if (msg->state == kobuki_msg::BumberEvent.RELEASED) {
         canEscape = true;
         canAvoid = true;
         canTurn = true;
@@ -37,7 +46,7 @@ void haultCallback(const kobuki_msg::BumberEvent:ConstPtr& msg) {
 }
 
 /*
-* Listens to bumbers of turtlebot
+* Listens to bumber events
 */
 void hault() {
     // node pointer
@@ -48,6 +57,9 @@ void hault() {
     ros::spin();
 }
 
+// ========================================================
+// KEYBOARD FEATURE
+// ========================================================
 /**
 * Deals with the keyboard commands from teleop keyboard
 */
@@ -81,7 +93,7 @@ void keyboardCallback(const geometry_msgs::Twist::ConstPtr& msg) {
 }
 
 /**
-* Listens to commands from teleop keyboard
+* Listens to keyboard commands from teleop keyboard
 */
 void keyboard() {
     // node pointer
@@ -92,6 +104,9 @@ void keyboard() {
     ros::spin();
 }
 
+// ========================================================
+// TURN FEATURE
+// ========================================================
 /**
 * Publishes commands for rotating 15 degrees in a random direction.
 * Commands are published whenever 1 meter has approximately been traveled.
@@ -142,6 +157,9 @@ void turn() {
     }
 }
 
+// ========================================================
+// DRIVE FEATURE
+// ========================================================
 /**
 * Publishes commands for traveling in a straigh line for one meter.
 */
@@ -177,6 +195,10 @@ void drive() {
         loop_rate.sleep();
     }
 }
+
+// ========================================================
+// MAIN METHOD
+// ========================================================
 
 /**
  * Initiates the node and begins our turtlebot's journey into the unknown
