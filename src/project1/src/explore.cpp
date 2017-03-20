@@ -21,7 +21,6 @@ bool canAvoid = true;
 bool canTurn = true;
 bool canDrive = true;
 int cooldown = 0;
-int bumperStates[3] = {0, 0, 0};
 
 // ========================================================
 // HAULT FEATURE
