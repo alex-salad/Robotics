@@ -1,7 +1,6 @@
 // imports
 // --------------------------------------------------------
 #include "ros/ros.h"
-#include "std_msgs/String.h"
 #include "geometry_msgs/Twist.h"
 #include "kobuki_msgs/BumperEvent.h"
 #include <math.h>
@@ -15,7 +14,6 @@
 // global variables
 // --------------------------------------------------------
 double distance_counter = 0;
-bool canKeyboard = true;
 bool canEscape = true;
 bool canAvoid = true;
 bool canTurn = true;
@@ -42,30 +40,27 @@ void hault(const kobuki_msgs::BumperEvent::ConstPtr& msg) {
 * Deals with the keyboard commands from teleop keyboard
 */
 void keyboard(const geometry_msgs::Twist::ConstPtr& msg) {
-    // take keyboard actions if enabled
-    if (keyboard) {
-        // get the distance traveled
-        double deltaX = msg->linear.x;
+    // get the distance traveled
+    double deltaX = msg->linear.x;
 
-        // increment cooldown counter and disable features
-        cooldown++;
-        canEscape = false;
-        canAvoid = false;
-        canTurn = false;
-        canDrive = false;
+    // increment cooldown counter and disable features
+    cooldown++;
+    canEscape = false;
+    canAvoid = false;
+    canTurn = false;
+    canDrive = false;
 
-        // decrement cooldown and update distance travelled after sleeping for 1 second
-        ros::Duration(1.0).sleep();
-        cooldown--;
-        distance_counter += deltaX;
+    // decrement cooldown and update distance travelled after sleeping for 1 second
+    ros::Duration(1.0).sleep();
+    cooldown--;
+    distance_counter += deltaX;
 
-        // return functionality if applicable
-        if (cooldown == 0 && keyboard) {
-            canEscape = true;
-            canAvoid = true;
-            canTurn = true;
-            canDrive = true;
-        }
+    // return functionality if applicable
+    if (cooldown == 0) {
+        canEscape = true;
+        canAvoid = true;
+        canTurn = true;
+        canDrive = true;
     }
 }
 
@@ -77,14 +72,15 @@ void keyboard(const geometry_msgs::Twist::ConstPtr& msg) {
 * Commands are published whenever 1 meter has approximately been traveled.
 */
 void turn() {
-    // setup publisher and turn command
+    // node pointer
     ros::NodeHandlePtr n = boost::make_shared<ros::NodeHandle>();
+    // publisher for sending turn commands to gazebo
     ros::Publisher turn_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
+    // the turn command
     geometry_msgs::Twist turn_cmd;
     double angular_vel = TURN_ANGLE;    
     turn_cmd.linear.x = 0;
     turn_cmd.linear.y = 0;
-    turn_cmd.angular.z = (rand() % 2) ? angular_vel : -1 * angular_vel;
     
     // run at 5Hz
     ros::Rate loop_rate(5);    
@@ -99,6 +95,8 @@ void turn() {
             canDrive = false;
             double current_angle = 0;
             double start_time = ros::Time::now().toSec();
+            // get a random direction for turning
+            turn_cmd.angular.z = (rand() % 2) ? angular_vel : -1 * angular_vel;
             while (ros::ok() && canTurn && current_angle < TURN_ANGLE) {
                 turn_pub.publish(turn_cmd);
                 current_angle =  angular_vel * ((ros::Time::now().toSec()) - start_time);
