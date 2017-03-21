@@ -3,12 +3,19 @@
 #include "ros/ros.h"
 #include "geometry_msgs/Twist.h"
 #include "kobuki_msgs/BumperEvent.h"
+#include "sensor_msgs/PointCloud2.h"
+#include "pcl_ros/point_cloud.h"
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 #include <math.h>
 #include <boost/thread/thread.hpp>
 #include <iostream>
+
 // constants
 // --------------------------------------------------------
 #define TURN_ANGLE M_PI / 12
+#define AVOID_ANGLE M_PI
 #define SPEED 0.2
 
 // global variables
@@ -30,6 +37,38 @@ void hault(const kobuki_msgs::BumperEvent::ConstPtr& msg) {
     // shut down the system! Turtle bot has died!
     if (msg->state == kobuki_msgs::BumperEvent::PRESSED) {
         ros::shutdown();
+    }
+}
+
+// ========================================================
+// AVOID FEATURE
+// ========================================================
+/**
+ * Deals with point cloud for obstacle avoidance
+ */
+void avoid(const sensor_msgs::PointCloud2ConstPtr& msg) {
+    pcl::PointCloud<pcl::PointXYZ> cloud;
+    pcl::fromROSMsg(*msg, cloud);
+    double ax = 0;
+    double ay = 0;
+    double az = 0;
+    // iterate through points
+    int valid_points = 0;
+    for (int i = 0; i < cloud.size(); i++) {
+        pcl::PointXYZ *temp = &(cloud.points[i]);
+        // check for invalid points and only work with decent ones
+        if(!isnan((*temp).x) && !isnan((*temp).y) && !isnan((*temp).z)) {
+            ax += (*temp).x;
+            ay += (*temp).y;
+            az += (*temp).z;
+            valid_points++;
+        }
+    }
+    if (valid_points > 0) {
+        ax /= valid_points;
+        ay /= valid_points;
+        az /= valid_points;
+        std::cout << "averages x: " << ax << " y: " << ay << " z: " << az << std::endl;
     }
 }
 
@@ -159,6 +198,7 @@ int main (int argc, char **argv) {
     // create subscibers
     ros::Subscriber hault_sub = n.subscribe("mobile_base/events/bumper", 1, hault);
     ros::Subscriber keyboard_sub = n.subscribe("turtlebot_telop_keyboard/cmd_vel", 5, keyboard);
+    ros::Subscriber avoid_sub = n.subscribe("camera/depth/points", 2, avoid);
     // start threads
     boost::thread turn_thread(turn);
     boost::thread drive_thread(drive);
