@@ -42,7 +42,7 @@ private:
     int cooldown;
     // private functions
     void hault(const kobuki_msgs::BumperEvent::ConstPtr &msg);
-    int detect(const pcl::PointCloud<PointXYZ> *cloud);
+    int detect(const pcl::PointCloud<pcl::PointXYZ> *cloud);
     void escape(const sensor_msgs::PointCloud2ConstPtr &msg);
     void avoid(const sensor_msgs::PointCloud2ConstPtr &msg);
     void keyboard(const geometry_msgs::Twist::ConstPtr &msg);
@@ -50,10 +50,10 @@ private:
     void drive();
 public:
     // public functions
-    Explorer(const ros::NodeHandle &n);
+    Explorer(ros::NodeHandle *n);
     ~Explorer();
-    void run();
-}
+    void explore();
+};
 
 // ========================================================
 // CONSTRUCTOR
@@ -61,7 +61,7 @@ public:
 /**
 * initiates all the variables
 */
-Explorer::Explorer(const ros::NodeHandle &n) {
+Explorer::Explorer(ros::NodeHandle *n) {
     this->n = n;
     distance_counter = 0;
     canEscape = true;
@@ -109,7 +109,7 @@ int Explorer::detect(const pcl::PointCloud<pcl::PointXYZ> *cloud) {
 
     // iterate through points and calculate the distance
     for (int i = 0; i < cloud->size(); i++) {
-        pcl::PointXYZ *temp = &(cloud->points[i]);
+        const pcl::PointXYZ *temp = &(cloud->points[i]);
         // check for invalid points and only work with decent ones
         if(!isnan(temp->x) && !isnan(temp->y) && !isnan(temp->z)) {
             // x > 0 is points to the right
@@ -300,12 +300,12 @@ void Explorer::drive() {
 */
 void Explorer::explore() {
     // create subscibers
-    ros::Subscriber hault_sub = n->subscribe("mobile_base/events/bumper", 1, hault);
-    ros::Subscriber keyboard_sub = n->subscribe("turtlebot_telop_keyboard/cmd_vel", 5, keyboard);
-    ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 2, escape);
+    ros::Subscriber hault_sub = n->subscribe("mobile_base/events/bumper", 1, &Explorer::hault, this);
+    ros::Subscriber keyboard_sub = n->subscribe("turtlebot_telop_keyboard/cmd_vel", 5, &Explorer::keyboard, this);
+    ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 2, &Explorer::escape, this);
     // start threads
-    boost::thread turn_thread(turn);
-    boost::thread drive_thread(drive);
+    boost::thread turn_thread(&Explorer::turn, this);
+    boost::thread drive_thread(&Explorer::drive, this);
     // detach threads
     turn_thread.detach();
     drive_thread.detach();
@@ -323,7 +323,7 @@ void Explorer::explore() {
 int main (int argc, char **argv) {
     ros::init(argc, argv, "explore");
     ros::NodeHandle n;
-    Explorer dora(n);
-    dora.exlore();
+    Explorer dora(&n);
+    dora.explore();
     return 0;
 }
