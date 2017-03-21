@@ -11,6 +11,7 @@
 #include <math.h>
 #include <boost/thread/thread.hpp>
 #include <iostream>
+#include <stdlib.h>
 
 // constants
 // --------------------------------------------------------
@@ -21,6 +22,7 @@
 #define RIGHT_OBSTACLE 1
 #define LEFT_OBSTACLE 2
 #define NO_OBSTACLE -1
+#define DELTA 0.1
 
 // ========================================================
 // CLASS DEFINITION
@@ -97,29 +99,54 @@ void Explorer::hault(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
 * detects if there are any obstacle and where they are from
 */
 int Explorer::detect(const pcl::PointCloud<pcl::PointXYZ> *cloud) { 
-    double ax = 0;
-    double ay = 0;
-    double az = 0;
-    // iterate through points
-    int valid_points = 0;
+    // NOTE X = RIGHT, Y = DOWN, Z = FORWARD
+    double distance_right = 0;
+    int right_points = 0;
+    double distance_left = 0;
+    int left_points = 0;
+
+    // will use z as distance even though distance is (x^2 + y^2 + z^2)^(1/2)
+
+    // iterate through points and calculate the distance
     for (int i = 0; i < cloud->size(); i++) {
-        pcl::PointXYZ *temp = cloud.points[i];
+        pcl::PointXYZ *temp = &(cloud->points[i]);
         // check for invalid points and only work with decent ones
         if(!isnan(temp->x) && !isnan(temp->y) && !isnan(temp->z)) {
-            ax += temp->x;
-            ay += temp->y;
-            az += temp->z;
-            valid_points++;
+            // x > 0 is points to the right
+            if(temp->x > 0) {
+                distance_right += temp->z;
+                right_points++;
+            } else if (temp->x < 0) {
+                distance_left += temp->z;
+                left_points++;
+            }
         }
     }
-    if (valid_points > 0) {
-        ax /= valid_points;
-        ay /= valid_points;
-        az /= valid_points;
-        std::cout << "averages x: " << ax << " y: " << ay << " z: " << az << std::endl;
+
+    // if obstacle further than 1 meter or if no points detected then no obstacle assumed
+    if ((right_points == 0 && left_points == 0) || (distance_right > 1.0 && distance_left > 1.0)) {
+        return NO_OBSTACLE;
     }
-    // TODO: FIX THIS THING
-    return -1;
+
+    // get the averages for each side; no points assumes far away e.g. 2 meters
+    distance_right = (right_points > 0) ? distance_right / right_points : 2.0;
+    distance_left = (left_points > 0) ? distance_left / left_points : 2.0;
+
+    // if distances are about the same than assume symmetric obstacle ahead
+    if (abs(distance_right - distance_left) < DELTA) {
+        return FRONT_OBSTACLE;
+    }
+
+    // determine if obstacle is to the left or right
+    if (distance_left < 1.0 && distance_left < distance_right) {
+        return LEFT_OBSTACLE;
+    }
+    else if (distance_right < 1.0 && distance_right < distance_left) {
+        return RIGHT_OBSTACLE;
+    }
+
+    // no obstacle by default
+    return NO_OBSTACLE;
 }
 
 // ========================================================
@@ -134,6 +161,7 @@ void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
     int status = detect(cloud);
     if (status == FRONT_OBSTACLE) {
         // TODO implement escape behavior
+        std::cout << "obstacle detected! status: " << status << std::endl;
     }
 }
 
@@ -149,6 +177,7 @@ void Explorer::avoid(const sensor_msgs::PointCloud2ConstPtr &msg) {
     int status = detect(cloud);
     if (status == LEFT_OBSTACLE || status == RIGHT_OBSTACLE) {
         // TODO implement avoid behavior
+        std::cout << "obstacle detected! status: " << status << std::endl;
     }
 }
 
