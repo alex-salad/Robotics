@@ -16,7 +16,7 @@
 // constants
 // --------------------------------------------------------
 #define TURN_ANGLE M_PI / 12
-#define AVOID_ANGLE M_PI
+#define ESCAPE_ANGLE M_PI
 #define SPEED 0.2
 #define FRONT_OBSTACLE 0
 #define RIGHT_OBSTACLE 1
@@ -34,6 +34,8 @@ class Explorer {
 private:
     // private variables
     ros::NodeHandle *n;
+    bool escaping;
+    bool avoiding;
     bool canEscape;
     bool canAvoid;
     bool canTurn;
@@ -42,8 +44,9 @@ private:
     int cooldown;
     // private functions
     void hault(const kobuki_msgs::BumperEvent::ConstPtr &msg);
-    int detect(const pcl::PointCloud<pcl::PointXYZ> *cloud);
+    int detect(pcl::PointCloud<pcl::PointXYZ> *cloud);
     void escape(const sensor_msgs::PointCloud2ConstPtr &msg);
+    void rotate(double angle, double angular_velocity, bool &condition);
     void avoid(const sensor_msgs::PointCloud2ConstPtr &msg);
     void keyboard(const geometry_msgs::Twist::ConstPtr &msg);
     void turn();
@@ -64,11 +67,13 @@ public:
 Explorer::Explorer(ros::NodeHandle *n) {
     this->n = n;
     distance_counter = 0;
+    escaping = false;
+    avoiding = false;
     canEscape = true;
     canAvoid = true;
     canTurn = true;
     canDrive = true;
-    cooldown = 0;    
+    cooldown = 0;   
 }
 
 // ========================================================
@@ -98,7 +103,7 @@ void Explorer::hault(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
 /**
 * detects if there are any obstacle and where they are from
 */
-int Explorer::detect(const pcl::PointCloud<pcl::PointXYZ> *cloud) { 
+int Explorer::detect(pcl::PointCloud<pcl::PointXYZ> *cloud) { 
     // NOTE X = RIGHT, Y = DOWN, Z = FORWARD
     double distance_right = 0;
     int right_points = 0;
@@ -108,8 +113,9 @@ int Explorer::detect(const pcl::PointCloud<pcl::PointXYZ> *cloud) {
     // will use z as distance even though distance is (x^2 + y^2 + z^2)^(1/2)
 
     // iterate through points and calculate the distance
-    for (int i = 0; i < cloud->size(); i++) {
-        const pcl::PointXYZ *temp = &(cloud->points[i]);
+    // read only every other row
+    for (int i = 0; i < cloud->size(); i += (i > 0 && i % 640 == 0) ? 480 : 64) {
+        pcl::PointXYZ *temp = &(cloud->points[i]);
         // check for invalid points and only work with decent ones
         if(!isnan(temp->x) && !isnan(temp->y) && !isnan(temp->z)) {
             // x > 0 is points to the right
@@ -123,25 +129,30 @@ int Explorer::detect(const pcl::PointCloud<pcl::PointXYZ> *cloud) {
         }
     }
 
+    // get the averages for each side; no points assumes far away e.g. 2 meters
+    distance_right = (right_points > 0) ? distance_right / right_points : 2.0;
+    distance_left = (left_points > 0) ? distance_left / left_points : 2.0;
+
+    std::cout << "Rigth: " << distance_right << "Left: " << distance_left << std::endl;
+
     // if obstacle further than 1 meter or if no points detected then no obstacle assumed
     if ((right_points == 0 && left_points == 0) || (distance_right > 1.0 && distance_left > 1.0)) {
         return NO_OBSTACLE;
     }
 
-    // get the averages for each side; no points assumes far away e.g. 2 meters
-    distance_right = (right_points > 0) ? distance_right / right_points : 2.0;
-    distance_left = (left_points > 0) ? distance_left / left_points : 2.0;
-
     // if distances are about the same than assume symmetric obstacle ahead
-    if (abs(distance_right - distance_left) < DELTA) {
+    if (fabs(distance_right - distance_left) < DELTA) {
+        std::cout << "Front Obstacle R-L: " << fabs(distance_right - distance_left) << std::endl;
         return FRONT_OBSTACLE;
     }
 
     // determine if obstacle is to the left or right
     if (distance_left < 1.0 && distance_left < distance_right) {
+        std::cout << "Left Obstacle" << std::endl;
         return LEFT_OBSTACLE;
     }
     else if (distance_right < 1.0 && distance_right < distance_left) {
+        std::cout << "Right Obstacle" << std::endl;
         return RIGHT_OBSTACLE;
     }
 
@@ -150,26 +161,32 @@ int Explorer::detect(const pcl::PointCloud<pcl::PointXYZ> *cloud) {
 }
 
 // ========================================================
-// ESCAPE FEATURE
+// ROTATE FEATURE
 // ========================================================
 /**
- * Deals with point cloud for escaping from dangerous obstacles
+ * publishes commands for rotating the turtle bot
  */
-void Explorer::rotate(double angle, double angular_velocity, bool &condition) {
-    ros::Publisher rotate_cmd = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
+void Explorer::rotate(double angle, double angular_vel, bool &condition) {
+    ros::Publisher rotate_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
+    
+    // message for rotating
+    geometry_msgs::Twist rotate_cmd;
     // not moving
     rotate_cmd.linear.x = 0;
     rotate_cmd.linear.y = 0;
     rotate_cmd.linear.z = 0;
     // only rotating
-    rotate_cmd.angular.z = angular_velocity;
+    rotate_cmd.angular.z = angular_vel;
 
     double current_angle = 0;
     double start_time = ros::Time::now().toSec();
+    
+    // run at 5Hz
+    ros::Rate loop_rate(5); 
     // get a random direction for turning
     while (ros::ok() &&  condition && current_angle < angle) {
-        turn_pub.publish(turn_cmd);
-        current_angle =  angular_vel * ((ros::Time::now().toSec()) - start_time);
+        rotate_pub.publish(rotate_cmd);
+        current_angle =  fabs(angular_vel) * ((ros::Time::now().toSec()) - start_time);
         loop_rate.sleep();
     }
 
@@ -183,12 +200,27 @@ void Explorer::rotate(double angle, double angular_velocity, bool &condition) {
  * Deals with point cloud for escaping from dangerous obstacles
  */
 void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
-    pcl::PointCloud<pcl::PointXYZ> *cloud;
-    pcl::fromROSMsg(*msg, *cloud);
-    int status = detect(cloud);
-    if (status == FRONT_OBSTACLE) {
-        // TODO implement escape behavior
+    // convert point cloud
+    pcl::PointCloud<pcl::PointXYZ> cloud;
+    pcl::fromROSMsg(*msg, cloud);
+    // detect if obstacle is in the way
+    int status = detect(&cloud);
+    // escpace if obstacle is in the front
+    if (status == FRONT_OBSTACLE && !escaping) {
+        // disable features
+        canAvoid = false;
+        canTurn = false;
+        canDrive = false;
+      
         std::cout << "obstacle detected! status: " << status << std::endl;
+        escaping = true;
+        rotate(ESCAPE_ANGLE, ESCAPE_ANGLE / 4.0, canEscape);
+        escaping = false;
+           
+        // reanable features
+        canAvoid = true;
+        canTurn = true;
+        canDrive = true;
     }
 }
 
@@ -199,12 +231,23 @@ void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
  * Deals with point cloud for avoiding dangerous obstacles
  */
 void Explorer::avoid(const sensor_msgs::PointCloud2ConstPtr &msg) {
-    pcl::PointCloud<pcl::PointXYZ> *cloud;
-    pcl::fromROSMsg(*msg, *cloud);
-    int status = detect(cloud);
+    pcl::PointCloud<pcl::PointXYZ> cloud;
+    pcl::fromROSMsg(*msg, cloud);
+    int status = detect(&cloud);
     if (status == LEFT_OBSTACLE || status == RIGHT_OBSTACLE) {
-        // TODO implement avoid behavior
+        canTurn = false;
+        canDrive = false;
+
+        int direction = (status == LEFT_OBSTACLE) ? -1 : 1;
+
         std::cout << "obstacle detected! status: " << status << std::endl;
+        avoiding = true;
+        rotate(TURN_ANGLE, TURN_ANGLE * direction, canAvoid);
+        avoiding = false;
+
+        // reanable features
+        canTurn = true;
+        canDrive = true;
     }
 }
 
@@ -219,25 +262,30 @@ void Explorer::avoid(const sensor_msgs::PointCloud2ConstPtr &msg) {
 void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
     // get the distance traveled
     double deltaX = msg->linear.x;
+    double deltaZ = msg->angular.z;
+    
+    if (deltaX != 0 && deltaZ != 0) {
+        std::cout << "X: " << deltaX << " Z: " << deltaZ << std::endl;
 
-    // increment cooldown counter and disable features
-    cooldown++;
-    canEscape = false;
-    canAvoid = false;
-    canTurn = false;
-    canDrive = false;
+        // increment cooldown counter and disable features
+        cooldown++;
+        canEscape = false;
+        canAvoid = false;
+        canTurn = false;
+        canDrive = false;
 
-    // decrement cooldown and update distance travelled after sleeping for 1 second
-    ros::Duration(1.0).sleep();
-    cooldown--;
-    distance_counter += deltaX;
+        // decrement cooldown and update distance travelled after sleeping for 1 second
+        ros::Duration(1.0).sleep();
+        cooldown--;
+        distance_counter += deltaX;
 
-    // return functionality if applicable
-    if (cooldown == 0) {
-        canEscape = true;
-        canAvoid = true;
-        canTurn = true;
-        canDrive = true;
+        // return functionality if applicable
+        if (cooldown == 0) {
+            canEscape = true;
+            canAvoid = true;
+            canTurn = true;
+            canDrive = true;
+        }
     }
 }
 
@@ -251,6 +299,7 @@ void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
 void Explorer::turn() {
     // publisher for sending turn commands to gazebo
     ros::Publisher turn_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
+
     // the turn command
     geometry_msgs::Twist turn_cmd;
     double angular_vel = TURN_ANGLE;    
@@ -314,7 +363,7 @@ void Explorer::drive() {
             loop_rate.sleep();
         }
         // update distance traveled
-        distance_counter += distance_counter;
+        distance_counter += current_distance;
         loop_rate.sleep();
     }
 }
@@ -328,8 +377,9 @@ void Explorer::drive() {
 void Explorer::explore() {
     // create subscibers
     ros::Subscriber hault_sub = n->subscribe("mobile_base/events/bumper", 1, &Explorer::hault, this);
-    ros::Subscriber keyboard_sub = n->subscribe("turtlebot_telop_keyboard/cmd_vel", 5, &Explorer::keyboard, this);
-    ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 2, &Explorer::escape, this);
+    ros::Subscriber keyboard_sub = n->subscribe("cmd_vel_mux/input/teleop", 5, &Explorer::keyboard, this);
+    ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 1, &Explorer::escape, this);
+    ros::Subscriber avoid_sub = n->subscribe("camera/depth/points", 1, &Explorer::avoid, this);
     // start threads
     boost::thread turn_thread(&Explorer::turn, this);
     boost::thread drive_thread(&Explorer::drive, this);
