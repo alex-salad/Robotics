@@ -17,6 +17,10 @@
 #define TURN_ANGLE M_PI / 12
 #define AVOID_ANGLE M_PI
 #define SPEED 0.2
+#define FRONT_OBSTACLE 0
+#define RIGHT_OBSTACLE 1
+#define LEFT_OBSTACLE 2
+#define NO_OBSTACLE -1
 
 // ========================================================
 // CLASS DEFINITION
@@ -36,7 +40,9 @@ private:
     int cooldown;
     // private functions
     void hault(const kobuki_msgs::BumperEvent::ConstPtr &msg);
+    int detect(const pcl::PointCloud<PointXYZ> *cloud);
     void escape(const sensor_msgs::PointCloud2ConstPtr &msg);
+    void avoid(const sensor_msgs::PointCloud2ConstPtr &msg);
     void keyboard(const geometry_msgs::Twist::ConstPtr &msg);
     void turn();
     void drive();
@@ -85,26 +91,24 @@ void Explorer::hault(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
 }
 
 // ========================================================
-// ESCAPE FEATURE
+// DETECT FEATURE
 // ========================================================
 /**
- * Deals with point cloud for escaping from dangerous obstacles
- */
-void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
-    pcl::PointCloud<pcl::PointXYZ> cloud;
-    pcl::fromROSMsg(*msg, cloud);
+* detects if there are any obstacle and where they are from
+*/
+int Explorer::detect(const pcl::PointCloud<pcl::PointXYZ> *cloud) { 
     double ax = 0;
     double ay = 0;
     double az = 0;
     // iterate through points
     int valid_points = 0;
-    for (int i = 0; i < cloud.size(); i++) {
-        pcl::PointXYZ *temp = &(cloud.points[i]);
+    for (int i = 0; i < cloud->size(); i++) {
+        pcl::PointXYZ *temp = cloud.points[i];
         // check for invalid points and only work with decent ones
-        if(!isnan((*temp).x) && !isnan((*temp).y) && !isnan((*temp).z)) {
-            ax += (*temp).x;
-            ay += (*temp).y;
-            az += (*temp).z;
+        if(!isnan(temp->x) && !isnan(temp->y) && !isnan(temp->z)) {
+            ax += temp->x;
+            ay += temp->y;
+            az += temp->z;
             valid_points++;
         }
     }
@@ -114,7 +118,41 @@ void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
         az /= valid_points;
         std::cout << "averages x: " << ax << " y: " << ay << " z: " << az << std::endl;
     }
+    // TODO: FIX THIS THING
+    return -1;
 }
+
+// ========================================================
+// ESCAPE FEATURE
+// ========================================================
+/**
+ * Deals with point cloud for escaping from dangerous obstacles
+ */
+void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
+    pcl::PointCloud<pcl::PointXYZ> *cloud;
+    pcl::fromROSMsg(*msg, *cloud);
+    int status = detect(cloud);
+    if (status == FRONT_OBSTACLE) {
+        // TODO implement escape behavior
+    }
+}
+
+// ========================================================
+// AVOID FEATURE
+// ========================================================
+/**
+ * Deals with point cloud for avoiding dangerous obstacles
+ */
+void Explorer::avoid(const sensor_msgs::PointCloud2ConstPtr &msg) {
+    pcl::PointCloud<pcl::PointXYZ> *cloud;
+    pcl::fromROSMsg(*msg, *cloud);
+    int status = detect(cloud);
+    if (status == LEFT_OBSTACLE || status == RIGHT_OBSTACLE) {
+        // TODO implement avoid behavior
+    }
+}
+
+
 
 // ========================================================
 // KEYBOARD FEATURE
