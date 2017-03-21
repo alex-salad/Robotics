@@ -18,22 +18,66 @@
 #define AVOID_ANGLE M_PI
 #define SPEED 0.2
 
-// global variables
-// --------------------------------------------------------
-double distance_counter = 0;
-bool canEscape = true;
-bool canAvoid = true;
-bool canTurn = true;
-bool canDrive = true;
-int cooldown = 0;
+// ========================================================
+// CLASS DEFINITION
+// ========================================================
+/**
+* contains all the functions for allowing the turtle bot to explore
+*/
+class Explorer {
+private:
+    // private variables
+    ros::NodeHandle *n;
+    bool canEscape;
+    bool canAvoid;
+    bool canTurn;
+    bool canDrive;
+    double distance_counter;
+    int cooldown;
+    // private functions
+    void hault(const kobuki_msgs::BumperEvent::ConstPtr &msg);
+    void escape(const sensor_msgs::PointCloud2ConstPtr &msg);
+    void keyboard(const geometry_msgs::Twist::ConstPtr &msg);
+    void turn();
+    void drive();
+public:
+    // public functions
+    Explorer(const ros::NodeHandle &n);
+    ~Explorer();
+    void run();
+}
+
+// ========================================================
+// CONSTRUCTOR
+// ========================================================
+/**
+* initiates all the variables
+*/
+Explorer::Explorer(ros::NodeHandle &n) {
+    this->n = n;
+    distance_counter = 0;
+    canEscape = true;
+    canAvoid = true;
+    canTurn = true;
+    canDrive = true;
+    cooldown = 0;    
+}
+
+// ========================================================
+// DESTRUCTOR
+// ========================================================
+/**
+* empty since there is nothing to destroy as of yet
+*/
+Explorer::~Explorer() {}
 
 // ========================================================
 // HAULT FEATURE
 // ========================================================
-/*
+/**
 * Handles bumber events
 */
-void hault(const kobuki_msgs::BumperEvent::ConstPtr& msg) {
+void Explorer::hault(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
     // shut down the system! Turtle bot has died!
     if (msg->state == kobuki_msgs::BumperEvent::PRESSED) {
         ros::shutdown();
@@ -41,12 +85,12 @@ void hault(const kobuki_msgs::BumperEvent::ConstPtr& msg) {
 }
 
 // ========================================================
-// AVOID FEATURE
+// ESCAPE FEATURE
 // ========================================================
 /**
- * Deals with point cloud for obstacle avoidance
+ * Deals with point cloud for escaping from dangerous obstacles
  */
-void avoid(const sensor_msgs::PointCloud2ConstPtr& msg) {
+void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
     pcl::PointCloud<pcl::PointXYZ> cloud;
     pcl::fromROSMsg(*msg, cloud);
     double ax = 0;
@@ -78,7 +122,7 @@ void avoid(const sensor_msgs::PointCloud2ConstPtr& msg) {
 /**
 * Deals with the keyboard commands from teleop keyboard
 */
-void keyboard(const geometry_msgs::Twist::ConstPtr& msg) {
+void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
     // get the distance traveled
     double deltaX = msg->linear.x;
 
@@ -110,9 +154,7 @@ void keyboard(const geometry_msgs::Twist::ConstPtr& msg) {
 * Publishes commands for rotating 15 degrees in a random direction.
 * Commands are published whenever 1 meter has approximately been traveled.
 */
-void turn() {
-    // node pointer
-    ros::NodeHandlePtr n = boost::make_shared<ros::NodeHandle>();
+void Explorer::turn() {
     // publisher for sending turn commands to gazebo
     ros::Publisher turn_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
     // the turn command
@@ -154,11 +196,9 @@ void turn() {
 /**
 * Publishes commands for traveling in a straigh line for one meter.
 */
-void drive() {
-    // node pointer
-    ros::NodeHandlePtr n = boost::make_shared<ros::NodeHandle>();
+void Explorer::drive() {
     // publisher for sending move commands to gazebo
-    ros::Publisher drive_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 10);
+    ros::Publisher drive_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
 
     // the move to be published: STRAIGHT ONLY
     geometry_msgs::Twist move_cmd;
@@ -167,7 +207,7 @@ void drive() {
     move_cmd.angular.z = 0;
     
     // run at 5Hz
-    ros::Rate loop_rate(10);
+    ros::Rate loop_rate(5);
     
     // enters loop until ros quits
     while (ros::ok()) {
@@ -186,19 +226,16 @@ void drive() {
 }
 
 // ========================================================
-// MAIN METHOD
+// EXPLOR CONTROLLER
 // ========================================================
-
 /**
- * Initiates the node and begins our turtlebot's journey into the unknown
- */
-int main (int argc, char **argv) {
-    ros::init(argc, argv, "explore");
-    ros::NodeHandle n;
+* Creates all the subscribers and threads and begins our turtlebot's journey into the unknown
+*/
+void Explorer::explore() {
     // create subscibers
-    ros::Subscriber hault_sub = n.subscribe("mobile_base/events/bumper", 1, hault);
-    ros::Subscriber keyboard_sub = n.subscribe("turtlebot_telop_keyboard/cmd_vel", 5, keyboard);
-    ros::Subscriber avoid_sub = n.subscribe("camera/depth/points", 2, avoid);
+    ros::Subscriber hault_sub = n->subscribe("mobile_base/events/bumper", 1, hault);
+    ros::Subscriber keyboard_sub = n->subscribe("turtlebot_telop_keyboard/cmd_vel", 5, keyboard);
+    ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 2, escape);
     // start threads
     boost::thread turn_thread(turn);
     boost::thread drive_thread(drive);
@@ -207,5 +244,19 @@ int main (int argc, char **argv) {
     drive_thread.detach();
     // spin away
     ros::spin();
+}
+
+// ========================================================
+// MAIN METHOD
+// ========================================================
+
+/**
+ * Initiates the node and explorer for well ... exlporation
+ */
+int main (int argc, char **argv) {
+    ros::init(argc, argv, "explore");
+    ros::NodeHandle n;
+    Explorer dora(n);
+    dora.exlore();
     return 0;
 }
