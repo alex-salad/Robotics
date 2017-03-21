@@ -53,7 +53,7 @@ public:
 /**
 * initiates all the variables
 */
-Explorer::Explorer(ros::NodeHandle &n) {
+Explorer::Explorer(const ros::NodeHandle &n) {
     this->n = n;
     distance_counter = 0;
     canEscape = true;
