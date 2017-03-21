@@ -10,10 +10,13 @@ project(project1)
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   kobuki_msgs
+  sensor_msgs
   rospy
   roscpp
   std_msgs
   message_generation
+  pcl_conversions
+  pcl_ros
 )
 
 ## System dependencies are found with CMake's conventions
@@ -76,6 +79,7 @@ generate_messages(
    geometry_msgs
    kobuki_msgs
    std_msgs
+   sensor_msgs
 )
 
 ################################################
@@ -110,7 +114,8 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES project1
-  CATKIN_DEPENDS geometry_msgs kobuki_msgs rospy roscpp std_msgs message_runtime
+  CATKIN_DEPENDS geometry_msgs kobuki_msgs rospy roscpp std_msgs message_runtime 
+  pcl_conversion pcl_ros sensor_msgs
 #  DEPENDS system_lib
 )
 
