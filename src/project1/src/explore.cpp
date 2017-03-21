@@ -155,6 +155,33 @@ int Explorer::detect(const pcl::PointCloud<pcl::PointXYZ> *cloud) {
 /**
  * Deals with point cloud for escaping from dangerous obstacles
  */
+void Explorer::rotate(double angle, double angular_velocity, bool &condition) {
+    ros::Publisher rotate_cmd = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
+    // not moving
+    rotate_cmd.linear.x = 0;
+    rotate_cmd.linear.y = 0;
+    rotate_cmd.linear.z = 0;
+    // only rotating
+    rotate_cmd.angular.z = angular_velocity;
+
+    double current_angle = 0;
+    double start_time = ros::Time::now().toSec();
+    // get a random direction for turning
+    while (ros::ok() &&  condition && current_angle < angle) {
+        turn_pub.publish(turn_cmd);
+        current_angle =  angular_vel * ((ros::Time::now().toSec()) - start_time);
+        loop_rate.sleep();
+    }
+
+
+}
+
+// ========================================================
+// ESCAPE FEATURE
+// ========================================================
+/**
+ * Deals with point cloud for escaping from dangerous obstacles
+ */
 void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
     pcl::PointCloud<pcl::PointXYZ> *cloud;
     pcl::fromROSMsg(*msg, *cloud);
