@@ -43,7 +43,7 @@ private:
     double distance_counter;
     int cooldown;
     // private functions
-    void hault(const kobuki_msgs::BumperEvent::ConstPtr &msg);
+    void halt(const kobuki_msgs::BumperEvent::ConstPtr &msg);
     int detect(pcl::PointCloud<pcl::PointXYZ> *cloud);
     void escape(const sensor_msgs::PointCloud2ConstPtr &msg);
     void rotate(double angle, double angular_velocity, bool &condition);
@@ -90,7 +90,7 @@ Explorer::~Explorer() {}
 /**
 * Handles bumber events
 */
-void Explorer::hault(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
+void Explorer::halt(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
     // shut down the system! Turtle bot has died!
     if (msg->state == kobuki_msgs::BumperEvent::PRESSED) {
         ros::shutdown();
@@ -376,7 +376,7 @@ void Explorer::drive() {
 */
 void Explorer::explore() {
     // create subscibers
-    ros::Subscriber hault_sub = n->subscribe("mobile_base/events/bumper", 1, &Explorer::hault, this);
+    ros::Subscriber halt_sub = n->subscribe("mobile_base/events/bumper", 1, &Explorer::halt, this);
     ros::Subscriber keyboard_sub = n->subscribe("cmd_vel_mux/input/teleop", 5, &Explorer::keyboard, this);
     ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 1, &Explorer::escape, this);
     ros::Subscriber avoid_sub = n->subscribe("camera/depth/points", 1, &Explorer::avoid, this);
