@@ -11,18 +11,17 @@
 #include <math.h>
 #include <boost/thread/thread.hpp>
 #include <iostream>
-#include <stdlib.h>
 
 // constants
 // --------------------------------------------------------
 #define TURN_ANGLE M_PI / 12
-#define ESCAPE_ANGLE M_PI
-#define SPEED 0.2
+#define ESCAPE_ANGLE M_PI * 10.0 / 9.0
+#define SPEED 0.25
 #define FRONT_OBSTACLE 0
 #define RIGHT_OBSTACLE 1
 #define LEFT_OBSTACLE 2
 #define NO_OBSTACLE -1
-#define DELTA 0.1
+#define DELTA 0.15
 
 // ========================================================
 // CLASS DEFINITION
@@ -43,7 +42,7 @@ private:
     double distance_counter;
     int cooldown;
     // private functions
-    void hault(const kobuki_msgs::BumperEvent::ConstPtr &msg);
+    void halt(const kobuki_msgs::BumperEvent::ConstPtr &msg);
     int detect(pcl::PointCloud<pcl::PointXYZ> *cloud);
     void escape(const sensor_msgs::PointCloud2ConstPtr &msg);
     void rotate(double angle, double angular_velocity, bool &condition);
@@ -85,12 +84,12 @@ Explorer::Explorer(ros::NodeHandle *n) {
 Explorer::~Explorer() {}
 
 // ========================================================
-// HAULT FEATURE
+// HALT FEATURE
 // ========================================================
 /**
 * Handles bumber events
 */
-void Explorer::hault(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
+void Explorer::halt(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
     // shut down the system! Turtle bot has died!
     if (msg->state == kobuki_msgs::BumperEvent::PRESSED) {
         ros::shutdown();
@@ -376,7 +375,7 @@ void Explorer::drive() {
 */
 void Explorer::explore() {
     // create subscibers
-    ros::Subscriber hault_sub = n->subscribe("mobile_base/events/bumper", 1, &Explorer::hault, this);
+    ros::Subscriber halt_sub = n->subscribe("mobile_base/events/bumper", 1, &Explorer::halt, this);
     ros::Subscriber keyboard_sub = n->subscribe("cmd_vel_mux/input/teleop", 5, &Explorer::keyboard, this);
     ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 1, &Explorer::escape, this);
     ros::Subscriber avoid_sub = n->subscribe("camera/depth/points", 1, &Explorer::avoid, this);
