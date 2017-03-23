@@ -11,18 +11,17 @@
 #include <math.h>
 #include <boost/thread/thread.hpp>
 #include <iostream>
-#include <stdlib.h>
 
 // constants
 // --------------------------------------------------------
 #define TURN_ANGLE M_PI / 12
-#define ESCAPE_ANGLE M_PI
-#define SPEED 0.2
+#define ESCAPE_ANGLE M_PI * 10.0 / 9.0
+#define SPEED 0.25
 #define FRONT_OBSTACLE 0
 #define RIGHT_OBSTACLE 1
 #define LEFT_OBSTACLE 2
 #define NO_OBSTACLE -1
-#define DELTA 0.1
+#define DELTA 0.15
 
 // ========================================================
 // CLASS DEFINITION
@@ -85,7 +84,7 @@ Explorer::Explorer(ros::NodeHandle *n) {
 Explorer::~Explorer() {}
 
 // ========================================================
-// HAULT FEATURE
+// HALT FEATURE
 // ========================================================
 /**
 * Handles bumber events
