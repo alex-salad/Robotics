@@ -132,7 +132,7 @@ int Explorer::detect(pcl::PointCloud<pcl::PointXYZ> *cloud) {
     distance_right = (right_points > 0) ? distance_right / right_points : 2.0;
     distance_left = (left_points > 0) ? distance_left / left_points : 2.0;
 
-    std::cout << "Rigth: " << distance_right << "Left: " << distance_left << std::endl;
+    std::cout << "Right: " << distance_right << "Left: " << distance_left << std::endl;
 
     // if obstacle further than 1 meter or if no points detected then no obstacle assumed
     if ((right_points == 0 && left_points == 0) || (distance_right > 1.0 && distance_left > 1.0)) {
