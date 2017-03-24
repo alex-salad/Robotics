@@ -13,11 +13,11 @@ Tyler Woodfin
 `$ ./run_me2.sh`
 - The project should now run.
 
-#Troubleshooting
+# Troubleshooting
 Please ensure:
 - roscore is running properly
 - robotics is placed on the home directory and is named **"robotics"**.
 
 If you continue to experience problems, please open *run_me* and *run_me2* in your preferred text editor and execute the commands in this file in the terminal, one at a time.
 
-##Have a lovely day!
+## Have a lovely day! :smile:
