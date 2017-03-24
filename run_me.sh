@@ -1,5 +1,5 @@
 #!/bin/bash
-cd ~/Desktop/robotics-master
+cd ~/robotics
 catkin_make
 source devel/setup.bash
-roslaunch ~/Desktop/robotics-master/launch/project1.launch world_file:=$HOME/Desktop/robotics-master/worlds/project1.world
+roslaunch ~/robotics/launch/project1.launch world_file:=$HOME/robotics/worlds/project1.world
