@@ -14,7 +14,7 @@
 # Troubleshooting
 Please ensure:
 - roscore is running properly
-- you are in the the correct directory (**robotics**: for clone; **robotics-master**: for download.
+- you are in the the correct directory (**robotics**: for clone; **robotics-master**: for download)
 
 If you continue to experience problems, please open *run_me* and *run_me2* in your preferred text editor and execute the commands in this file in the terminal, one at a time.
 
