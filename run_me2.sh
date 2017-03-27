@@ -1,3 +1,3 @@
 #!/bin/bash
 source devel/setup.bash
-rosrun project1 explore
+rosrun kame_project1 explore
