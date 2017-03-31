@@ -166,7 +166,7 @@ int Explorer::detect(pcl::PointCloud<pcl::PointXYZ> *cloud) {
  * publishes commands for rotating the turtle bot
  */
 void Explorer::rotate(double angle, double angular_vel, bool &condition) {
-    ros::Publisher rotate_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
+    ros::Publisher rotate_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 2);
     
     // message for rotating
     geometry_msgs::Twist rotate_cmd;
@@ -211,7 +211,6 @@ void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
         canTurn = false;
         canDrive = false;
       
-        std::cout << "obstacle detected! status: " << status << std::endl;
         escaping = true;
         rotate(ESCAPE_ANGLE, ESCAPE_ANGLE / 4.0, canEscape);
         escaping = false;
@@ -239,7 +238,6 @@ void Explorer::avoid(const sensor_msgs::PointCloud2ConstPtr &msg) {
 
         int direction = (status == LEFT_OBSTACLE) ? -1 : 1;
 
-        std::cout << "obstacle detected! status: " << status << std::endl;
         avoiding = true;
         rotate(TURN_ANGLE, TURN_ANGLE * direction, canAvoid);
         avoiding = false;
@@ -297,7 +295,7 @@ void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
 */
 void Explorer::turn() {
     // publisher for sending turn commands to gazebo
-    ros::Publisher turn_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
+    ros::Publisher turn_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 2);
 
     // the turn command
     geometry_msgs::Twist turn_cmd;
@@ -340,7 +338,7 @@ void Explorer::turn() {
 */
 void Explorer::drive() {
     // publisher for sending move commands to gazebo
-    ros::Publisher drive_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 5);
+    ros::Publisher drive_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 2);
 
     // the move to be published: STRAIGHT ONLY
     geometry_msgs::Twist move_cmd;
@@ -375,10 +373,10 @@ void Explorer::drive() {
 */
 void Explorer::explore() {
     // create subscibers
-    ros::Subscriber halt_sub = n->subscribe("mobile_base/events/bumper", 1, &Explorer::halt, this);
+    ros::Subscriber halt_sub = n->subscribe("mobile_base/events/bumper", 10, &Explorer::halt, this);
     ros::Subscriber keyboard_sub = n->subscribe("cmd_vel_mux/input/teleop", 5, &Explorer::keyboard, this);
-    ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 1, &Explorer::escape, this);
-    ros::Subscriber avoid_sub = n->subscribe("camera/depth/points", 1, &Explorer::avoid, this);
+    ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 2, &Explorer::escape, this);
+    ros::Subscriber avoid_sub = n->subscribe("camera/depth/points", 2, &Explorer::avoid, this);
     // start threads
     boost::thread turn_thread(&Explorer::turn, this);
     boost::thread drive_thread(&Explorer::drive, this);
