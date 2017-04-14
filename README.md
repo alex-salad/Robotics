@@ -1,15 +1,22 @@
-# Robotics Project 1
+# Robotics Project
 - Jordan Nguyen
 - Alex Salazar
 - Nicholas Von Busch
 - Tyler Woodfin
 
-# To Run
+# To Run (Project 1)
 - Clone or download repository and change into that directory.
 - Execute the following command: `$ ./run_me.sh`
 - Gazebo should open. If it does not, run the command again.
 - In a new terminal window, execute the following command: `$ ./run_me2.sh`
 - The project should now run.
+
+# To Run (Project 2)
+- Clone or download repository and change into that directory.
+- Execute the following command: `catkin_make`
+- Then execute the following command: `source devel/setup.bash`
+- SSH into turtlebot and roslaunch the minimual bringup and 3d bringup
+- In a new terminal, execute the following command; `roslaunch kame_project project2.launch`
 
 # Troubleshooting
 Please ensure:
