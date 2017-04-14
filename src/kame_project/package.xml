@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-  <name>kame_project1</name>
+  <name>kame_project</name>
   <version>1.0.0</version>
   <description>The proect for robotics</description>
   <maintainer email="alex@fake.com">alex</maintainer>

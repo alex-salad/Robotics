@@ -23,6 +23,9 @@
 #define NO_OBSTACLE -1
 #define DELTA 0.15
 
+// Debug hardcoded boolean
+bool debug = true;
+
 // ========================================================
 // CLASS DEFINITION
 // ========================================================
@@ -33,6 +36,7 @@ class Explorer {
 private:
     // private variables
     ros::NodeHandle *n;
+    ros::Publisher p;
     bool escaping;
     bool avoiding;
     bool canEscape;
@@ -65,6 +69,7 @@ public:
 */
 Explorer::Explorer(ros::NodeHandle *n) {
     this->n = n;
+    p = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 2);
     distance_counter = 0;
     escaping = false;
     avoiding = false;
@@ -132,7 +137,7 @@ int Explorer::detect(pcl::PointCloud<pcl::PointXYZ> *cloud) {
     distance_right = (right_points > 0) ? distance_right / right_points : 2.0;
     distance_left = (left_points > 0) ? distance_left / left_points : 2.0;
 
-    std::cout << "Right: " << distance_right << "Left: " << distance_left << std::endl;
+    if (debug) std::cout << "Right: " << distance_right << "Left: " << distance_left << std::endl;
 
     // if obstacle further than 1 meter or if no points detected then no obstacle assumed
     if ((right_points == 0 && left_points == 0) || (distance_right > 1.0 && distance_left > 1.0)) {
@@ -141,17 +146,17 @@ int Explorer::detect(pcl::PointCloud<pcl::PointXYZ> *cloud) {
 
     // if distances are about the same than assume symmetric obstacle ahead
     if (fabs(distance_right - distance_left) < DELTA) {
-        std::cout << "Front Obstacle R-L: " << fabs(distance_right - distance_left) << std::endl;
+        if (debug) std::cout << "Front Obstacle R-L: " << fabs(distance_right - distance_left) << std::endl;
         return FRONT_OBSTACLE;
     }
 
     // determine if obstacle is to the left or right
     if (distance_left < 1.0 && distance_left < distance_right) {
-        std::cout << "Left Obstacle" << std::endl;
+        if (debug) std::cout << "Left Obstacle" << std::endl;
         return LEFT_OBSTACLE;
     }
     else if (distance_right < 1.0 && distance_right < distance_left) {
-        std::cout << "Right Obstacle" << std::endl;
+        if (debug) std::cout << "Right Obstacle" << std::endl;
         return RIGHT_OBSTACLE;
     }
 
@@ -166,8 +171,6 @@ int Explorer::detect(pcl::PointCloud<pcl::PointXYZ> *cloud) {
  * publishes commands for rotating the turtle bot
  */
 void Explorer::rotate(double angle, double angular_vel, bool &condition) {
-    ros::Publisher rotate_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 2);
-    
     // message for rotating
     geometry_msgs::Twist rotate_cmd;
     // not moving
@@ -184,7 +187,7 @@ void Explorer::rotate(double angle, double angular_vel, bool &condition) {
     ros::Rate loop_rate(5); 
     // get a random direction for turning
     while (ros::ok() &&  condition && current_angle < angle) {
-        rotate_pub.publish(rotate_cmd);
+        p.publish(rotate_cmd);
         current_angle =  fabs(angular_vel) * ((ros::Time::now().toSec()) - start_time);
         loop_rate.sleep();
     }
@@ -204,8 +207,8 @@ void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
     pcl::fromROSMsg(*msg, cloud);
     // detect if obstacle is in the way
     int status = detect(&cloud);
-    // escpace if obstacle is in the front
-    if (status == FRONT_OBSTACLE && !escaping) {
+    // escape if obstacle is in the front
+    if (canEscape && status == FRONT_OBSTACLE && !escaping) {
         // disable features
         canAvoid = false;
         canTurn = false;
@@ -262,7 +265,7 @@ void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
     double deltaZ = msg->angular.z;
     
     if (deltaX != 0 && deltaZ != 0) {
-        std::cout << "X: " << deltaX << " Z: " << deltaZ << std::endl;
+        if (debug) std::cout << "X: " << deltaX << " Z: " << deltaZ << std::endl;
 
         // increment cooldown counter and disable features
         cooldown++;
@@ -271,8 +274,10 @@ void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
         canTurn = false;
         canDrive = false;
 
-        // decrement cooldown and update distance travelled after sleeping for 1 second
-        ros::Duration(1.0).sleep();
+        // TODO CHECK THIS OUT
+        //p.publish(*msg);
+        // decrement cooldown and update distance travelled after sleeping for half a second
+        ros::Duration(0.5).sleep();
         cooldown--;
         distance_counter += deltaX;
 
@@ -294,9 +299,6 @@ void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
 * Commands are published whenever 1 meter has approximately been traveled.
 */
 void Explorer::turn() {
-    // publisher for sending turn commands to gazebo
-    ros::Publisher turn_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 2);
-
     // the turn command
     geometry_msgs::Twist turn_cmd;
     double angular_vel = TURN_ANGLE;    
@@ -319,7 +321,7 @@ void Explorer::turn() {
             // get a random direction for turning
             turn_cmd.angular.z = (rand() % 2) ? angular_vel : -1 * angular_vel;
             while (ros::ok() && canTurn && current_angle < TURN_ANGLE) {
-                turn_pub.publish(turn_cmd);
+                p.publish(turn_cmd);
                 current_angle =  angular_vel * ((ros::Time::now().toSec()) - start_time);
                 loop_rate.sleep();
             }
@@ -337,9 +339,6 @@ void Explorer::turn() {
 * Publishes commands for traveling in a straigh line for one meter.
 */
 void Explorer::drive() {
-    // publisher for sending move commands to gazebo
-    ros::Publisher drive_pub = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 2);
-
     // the move to be published: STRAIGHT ONLY
     geometry_msgs::Twist move_cmd;
     move_cmd.linear.x = SPEED;
@@ -355,7 +354,7 @@ void Explorer::drive() {
         double current_distance = 0;        
         // publishes command for moving 1 meter at a time
         while (ros::ok() && canDrive && current_distance < 1) {
-            drive_pub.publish(move_cmd);
+            p.publish(move_cmd);
             current_distance = SPEED * (ros::Time::now().toSec() - start_time);
             loop_rate.sleep();
         }
@@ -366,7 +365,7 @@ void Explorer::drive() {
 }
 
 // ========================================================
-// EXPLOR CONTROLLER
+// EXPLORE CONTROLLER
 // ========================================================
 /**
 * Creates all the subscribers and threads and begins our turtlebot's journey into the unknown
@@ -374,7 +373,7 @@ void Explorer::drive() {
 void Explorer::explore() {
     // create subscibers
     ros::Subscriber halt_sub = n->subscribe("mobile_base/events/bumper", 10, &Explorer::halt, this);
-    ros::Subscriber keyboard_sub = n->subscribe("cmd_vel_mux/input/teleop", 5, &Explorer::keyboard, this);
+    ros::Subscriber keyboard_sub = n->subscribe("keyboard_controls", 5, &Explorer::keyboard, this);
     ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 2, &Explorer::escape, this);
     ros::Subscriber avoid_sub = n->subscribe("camera/depth/points", 2, &Explorer::avoid, this);
     // start threads
