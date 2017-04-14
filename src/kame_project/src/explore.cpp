@@ -15,8 +15,8 @@
 // constants
 // --------------------------------------------------------
 #define TURN_ANGLE M_PI / 12
-#define ESCAPE_ANGLE M_PI * 10.0 / 9.0
-#define SPEED 0.25
+#define ESCAPE_ANGLE M_PI * 5.0 / 6.0
+#define SPEED 0.2
 #define FRONT_OBSTACLE 0
 #define RIGHT_OBSTACLE 1
 #define LEFT_OBSTACLE 2
@@ -49,7 +49,7 @@ private:
     void halt(const kobuki_msgs::BumperEvent::ConstPtr &msg);
     int detect(pcl::PointCloud<pcl::PointXYZ> *cloud);
     void escape(const sensor_msgs::PointCloud2ConstPtr &msg);
-    void rotate(double angle, double angular_velocity, bool &condition);
+    void rotate(double angle, double angular_vel, bool &condition);
     void avoid(const sensor_msgs::PointCloud2ConstPtr &msg);
     void keyboard(const geometry_msgs::Twist::ConstPtr &msg);
     void turn();
@@ -202,26 +202,27 @@ void Explorer::rotate(double angle, double angular_vel, bool &condition) {
  * Deals with point cloud for escaping from dangerous obstacles
  */
 void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
+    if(!canEscape || escaping) return;
     // convert point cloud
     pcl::PointCloud<pcl::PointXYZ> cloud;
     pcl::fromROSMsg(*msg, cloud);
-    // detect if obstacle is in the way
+    // check for obstacle
     int status = detect(&cloud);
     // escape if obstacle is in the front
     if (canEscape && status == FRONT_OBSTACLE && !escaping) {
-        // disable features
+        // disable features      
+        escaping = true;
         canAvoid = false;
         canTurn = false;
         canDrive = false;
-      
-        escaping = true;
-        rotate(ESCAPE_ANGLE, ESCAPE_ANGLE / 4.0, canEscape);
-        escaping = false;
+
+        rotate(ESCAPE_ANGLE, TURN_ANGLE, canEscape);
            
         // reanable features
         canAvoid = true;
         canTurn = true;
         canDrive = true;
+        escaping = false;
     }
 }
 
@@ -232,22 +233,26 @@ void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
  * Deals with point cloud for avoiding dangerous obstacles
  */
 void Explorer::avoid(const sensor_msgs::PointCloud2ConstPtr &msg) {
+    if (!canAvoid || avoiding) return;
+    // converst to point cloud
     pcl::PointCloud<pcl::PointXYZ> cloud;
     pcl::fromROSMsg(*msg, cloud);
+    // check for obstacle
     int status = detect(&cloud);
-    if (status == LEFT_OBSTACLE || status == RIGHT_OBSTACLE) {
+    // avoid obstacle if it exists
+    if (canAvoid && status == LEFT_OBSTACLE || status == RIGHT_OBSTACLE) {
+        // disable features
+        avoiding = true;
         canTurn = false;
         canDrive = false;
 
         int direction = (status == LEFT_OBSTACLE) ? -1 : 1;
-
-        avoiding = true;
         rotate(TURN_ANGLE, TURN_ANGLE * direction, canAvoid);
-        avoiding = false;
 
         // reanable features
         canTurn = true;
         canDrive = true;
+        avoiding = false;
     }
 }
 
