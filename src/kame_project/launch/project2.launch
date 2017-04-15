@@ -2,8 +2,9 @@
     <!-- CREATE THE NODE FOR EXPLORE -->
     <node pkg="kame_project" name="explore" type="explore"/>
 
-    <!-- ALLOW MAPPING -->
-    <include file="$(find turtlebot_navigation)/launch/includes/gmapping/gmapping.launch.xml"/>
+    <!-- ALLOW MAPPING -->   
+    <!-- <include file="$(find turtlebot_navigation)/launch/includes/gmapping/gmapping.launch.xml"/>
+    -->
 
     <!-- CREATE THE NODE FOR TELEOP KEYBOARD AND REMAP OUTPUT -->
     <node pkg="turtlebot_teleop" type="turtlebot_teleop_key" name="turtlebot_teleop_keyboard"  output="screen">
