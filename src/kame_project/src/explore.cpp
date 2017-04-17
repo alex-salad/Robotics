@@ -10,7 +10,6 @@
 #include <pcl/point_types.h>
 #include <math.h>
 #include <boost/thread/thread.hpp>
-#include <iostream>
 
 // constants
 // --------------------------------------------------------
@@ -23,8 +22,6 @@
 #define NO_OBSTACLE -1
 #define DELTA 0.15
 
-// Debug hardcoded boolean
-bool debug = true;
 
 // ========================================================
 // CLASS DEFINITION
@@ -69,8 +66,8 @@ public:
 */
 Explorer::Explorer(ros::NodeHandle *n) {
     this->n = n;
-    p = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 2);
-    distance_counter = 0;
+    // publisher for auto movement
+    p = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 25);
     escaping = false;
     avoiding = false;
     canEscape = true;
@@ -97,6 +94,7 @@ Explorer::~Explorer() {}
 void Explorer::halt(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
     // shut down the system! Turtle bot has died!
     if (msg->state == kobuki_msgs::BumperEvent::PRESSED) {
+	ROS_INFO("Man down!");
         ros::shutdown();
     }
 }
@@ -117,17 +115,17 @@ int Explorer::detect(pcl::PointCloud<pcl::PointXYZ> *cloud) {
     // will use z as distance even though distance is (x^2 + y^2 + z^2)^(1/2)
 
     // iterate through points and calculate the distance
-    // read only every other row
-    for (int i = 0; i < cloud->size(); i += (i > 0 && i % 640 == 0) ? 480 : 64) {
+    // read only every other row (640 x 480)
+    for (int i = 640 * 120 + 160; i < cloud->size() - (640 * 120) - 160; i += 64) {
         pcl::PointXYZ *temp = &(cloud->points[i]);
         // check for invalid points and only work with decent ones
         if(!isnan(temp->x) && !isnan(temp->y) && !isnan(temp->z)) {
             // x > 0 is points to the right
             if(temp->x > 0) {
-                distance_right += temp->z;
+                distance_right += temp->z - 0.3;
                 right_points++;
             } else if (temp->x < 0) {
-                distance_left += temp->z;
+                distance_left += temp->z - 0.3;
                 left_points++;
             }
         }
@@ -137,7 +135,7 @@ int Explorer::detect(pcl::PointCloud<pcl::PointXYZ> *cloud) {
     distance_right = (right_points > 0) ? distance_right / right_points : 2.0;
     distance_left = (left_points > 0) ? distance_left / left_points : 2.0;
 
-    if (debug) std::cout << "Right: " << distance_right << "Left: " << distance_left << std::endl;
+    ROS_INFO("Right: %f Left: %f", distance_right, distance_left);
 
     // if obstacle further than 1 meter or if no points detected then no obstacle assumed
     if ((right_points == 0 && left_points == 0) || (distance_right > 1.0 && distance_left > 1.0)) {
@@ -146,17 +144,17 @@ int Explorer::detect(pcl::PointCloud<pcl::PointXYZ> *cloud) {
 
     // if distances are about the same than assume symmetric obstacle ahead
     if (fabs(distance_right - distance_left) < DELTA) {
-        if (debug) std::cout << "Front Obstacle R-L: " << fabs(distance_right - distance_left) << std::endl;
+        ROS_INFO("Front Obstacle R-L: %f", fabs(distance_right - distance_left));
         return FRONT_OBSTACLE;
     }
 
     // determine if obstacle is to the left or right
     if (distance_left < 1.0 && distance_left < distance_right) {
-        if (debug) std::cout << "Left Obstacle" << std::endl;
+        ROS_INFO("Left Obstacle");
         return LEFT_OBSTACLE;
     }
     else if (distance_right < 1.0 && distance_right < distance_left) {
-        if (debug) std::cout << "Right Obstacle" << std::endl;
+        ROS_INFO("Right Obstacle");
         return RIGHT_OBSTACLE;
     }
 
@@ -216,7 +214,7 @@ void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
         canTurn = false;
         canDrive = false;
 
-        rotate(ESCAPE_ANGLE, TURN_ANGLE, canEscape);
+        rotate(ESCAPE_ANGLE, TURN_ANGLE * 2, canEscape);
            
         // reanable features
         canAvoid = true;
@@ -265,34 +263,21 @@ void Explorer::avoid(const sensor_msgs::PointCloud2ConstPtr &msg) {
 * Deals with the keyboard commands from teleop keyboard
 */
 void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
-    // get the distance traveled
-    double deltaX = msg->linear.x;
-    double deltaZ = msg->angular.z;
-    
-    if (deltaX != 0 && deltaZ != 0) {
-        if (debug) std::cout << "X: " << deltaX << " Z: " << deltaZ << std::endl;
-
-        // increment cooldown counter and disable features
-        cooldown++;
+    // disable features and publish command
+    if (msg->linear.x != 0 || msg->angular.z != 0) {
         canEscape = false;
         canAvoid = false;
         canTurn = false;
         canDrive = false;
-
-        // TODO CHECK THIS OUT
-        //p.publish(*msg);
-        // decrement cooldown and update distance travelled after sleeping for half a second
-        ros::Duration(0.5).sleep();
-        cooldown--;
-        distance_counter += deltaX;
-
-        // return functionality if applicable
-        if (cooldown == 0) {
-            canEscape = true;
-            canAvoid = true;
-            canTurn = true;
-            canDrive = true;
-        }
+	
+	p.publish(*msg);
+    }
+    // enable features
+    else {
+        canEscape = true;
+        canAvoid = true;
+        canTurn = true;
+        canDrive = true;
     }
 }
 
@@ -377,8 +362,8 @@ void Explorer::drive() {
 */
 void Explorer::explore() {
     // create subscibers
-    ros::Subscriber halt_sub = n->subscribe("mobile_base/events/bumper", 10, &Explorer::halt, this);
-    ros::Subscriber keyboard_sub = n->subscribe("keyboard_controls", 5, &Explorer::keyboard, this);
+    ros::Subscriber halt_sub = n->subscribe("mobile_base/events/bumper", 20, &Explorer::halt, this);
+    ros::Subscriber keyboard_sub = n->subscribe("keyboard_controls", 100, &Explorer::keyboard, this);
     ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 2, &Explorer::escape, this);
     ros::Subscriber avoid_sub = n->subscribe("camera/depth/points", 2, &Explorer::avoid, this);
     // start threads
