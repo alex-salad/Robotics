@@ -3,13 +3,9 @@
 #include "ros/ros.h"
 #include "geometry_msgs/Twist.h"
 #include "kobuki_msgs/BumperEvent.h"
-#include "sensor_msgs/PointCloud2.h"
-#include "pcl_ros/point_cloud.h"
-#include <pcl_conversions/pcl_conversions.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
 #include <math.h>
 #include <boost/thread/thread.hpp>
+#include "sensor_msgs/LaserScan.h"
 
 // constants
 // --------------------------------------------------------
@@ -34,23 +30,19 @@ private:
     // private variables
     ros::NodeHandle *n;
     ros::Publisher p;
-    bool escaping;
-    bool avoiding;
-    bool canEscape;
-    bool canAvoid;
     bool canTurn;
     bool canDrive;
     double distance_counter;
     int cooldown;
     // private functions
     void halt(const kobuki_msgs::BumperEvent::ConstPtr &msg);
-    int detect(pcl::PointCloud<pcl::PointXYZ> *cloud);
-    void escape(const sensor_msgs::PointCloud2ConstPtr &msg);
     void rotate(double angle, double angular_vel, bool &condition);
-    void avoid(const sensor_msgs::PointCloud2ConstPtr &msg);
     void keyboard(const geometry_msgs::Twist::ConstPtr &msg);
     void turn();
     void drive();
+
+    void detect(const sensor_msgs::LaserScanConstPtr &msg);
+
 public:
     // public functions
     Explorer(ros::NodeHandle *n);
@@ -67,11 +59,7 @@ public:
 Explorer::Explorer(ros::NodeHandle *n) {
     this->n = n;
     // publisher for auto movement
-    p = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 25);
-    escaping = false;
-    avoiding = false;
-    canEscape = true;
-    canAvoid = true;
+    p = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 10);
     canTurn = true;
     canDrive = true;
     cooldown = 0;   
@@ -105,61 +93,8 @@ void Explorer::halt(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
 /**
 * detects if there are any obstacle and where they are from
 */
-int Explorer::detect(pcl::PointCloud<pcl::PointXYZ> *cloud) { 
-    // NOTE X = RIGHT, Y = DOWN, Z = FORWARD
-    double distance_right = 0;
-    int right_points = 0;
-    double distance_left = 0;
-    int left_points = 0;
-
-    // will use z as distance even though distance is (x^2 + y^2 + z^2)^(1/2)
-
-    // iterate through points and calculate the distance
-    // read only every other row (640 x 480)
-    for (int i = 640 * 120 + 160; i < cloud->size() - (640 * 120) - 160; i += 64) {
-        pcl::PointXYZ *temp = &(cloud->points[i]);
-        // check for invalid points and only work with decent ones
-        if(!isnan(temp->x) && !isnan(temp->y) && !isnan(temp->z)) {
-            // x > 0 is points to the right
-            if(temp->x > 0) {
-                distance_right += temp->z - 0.3;
-                right_points++;
-            } else if (temp->x < 0) {
-                distance_left += temp->z - 0.3;
-                left_points++;
-            }
-        }
-    }
-
-    // get the averages for each side; no points assumes far away e.g. 2 meters
-    distance_right = (right_points > 0) ? distance_right / right_points : 2.0;
-    distance_left = (left_points > 0) ? distance_left / left_points : 2.0;
-
-    ROS_INFO("Right: %f Left: %f", distance_right, distance_left);
-
-    // if obstacle further than 1 meter or if no points detected then no obstacle assumed
-    if ((right_points == 0 && left_points == 0) || (distance_right > 1.0 && distance_left > 1.0)) {
-        return NO_OBSTACLE;
-    }
-
-    // if distances are about the same than assume symmetric obstacle ahead
-    if (fabs(distance_right - distance_left) < DELTA) {
-        ROS_INFO("Front Obstacle R-L: %f", fabs(distance_right - distance_left));
-        return FRONT_OBSTACLE;
-    }
-
-    // determine if obstacle is to the left or right
-    if (distance_left < 1.0 && distance_left < distance_right) {
-        ROS_INFO("Left Obstacle");
-        return LEFT_OBSTACLE;
-    }
-    else if (distance_right < 1.0 && distance_right < distance_left) {
-        ROS_INFO("Right Obstacle");
-        return RIGHT_OBSTACLE;
-    }
-
-    // no obstacle by default
-    return NO_OBSTACLE;
+void Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
+    ROS_INFO("FUCK THIS %f", msg->range_min);
 }
 
 // ========================================================
@@ -181,8 +116,8 @@ void Explorer::rotate(double angle, double angular_vel, bool &condition) {
     double current_angle = 0;
     double start_time = ros::Time::now().toSec();
     
-    // run at 5Hz
-    ros::Rate loop_rate(5); 
+    // run at 10Hz
+    ros::Rate loop_rate(10); 
     // get a random direction for turning
     while (ros::ok() &&  condition && current_angle < angle) {
         p.publish(rotate_cmd);
@@ -194,69 +129,6 @@ void Explorer::rotate(double angle, double angular_vel, bool &condition) {
 }
 
 // ========================================================
-// ESCAPE FEATURE
-// ========================================================
-/**
- * Deals with point cloud for escaping from dangerous obstacles
- */
-void Explorer::escape(const sensor_msgs::PointCloud2ConstPtr &msg) {
-    if(!canEscape || escaping) return;
-    // convert point cloud
-    pcl::PointCloud<pcl::PointXYZ> cloud;
-    pcl::fromROSMsg(*msg, cloud);
-    // check for obstacle
-    int status = detect(&cloud);
-    // escape if obstacle is in the front
-    if (canEscape && status == FRONT_OBSTACLE && !escaping) {
-        // disable features      
-        escaping = true;
-        canAvoid = false;
-        canTurn = false;
-        canDrive = false;
-
-        rotate(ESCAPE_ANGLE, TURN_ANGLE * 2, canEscape);
-           
-        // reanable features
-        canAvoid = true;
-        canTurn = true;
-        canDrive = true;
-        escaping = false;
-    }
-}
-
-// ========================================================
-// AVOID FEATURE
-// ========================================================
-/**
- * Deals with point cloud for avoiding dangerous obstacles
- */
-void Explorer::avoid(const sensor_msgs::PointCloud2ConstPtr &msg) {
-    if (!canAvoid || avoiding) return;
-    // converst to point cloud
-    pcl::PointCloud<pcl::PointXYZ> cloud;
-    pcl::fromROSMsg(*msg, cloud);
-    // check for obstacle
-    int status = detect(&cloud);
-    // avoid obstacle if it exists
-    if (canAvoid && status == LEFT_OBSTACLE || status == RIGHT_OBSTACLE) {
-        // disable features
-        avoiding = true;
-        canTurn = false;
-        canDrive = false;
-
-        int direction = (status == LEFT_OBSTACLE) ? -1 : 1;
-        rotate(TURN_ANGLE, TURN_ANGLE * direction, canAvoid);
-
-        // reanable features
-        canTurn = true;
-        canDrive = true;
-        avoiding = false;
-    }
-}
-
-
-
-// ========================================================
 // KEYBOARD FEATURE
 // ========================================================
 /**
@@ -265,8 +137,6 @@ void Explorer::avoid(const sensor_msgs::PointCloud2ConstPtr &msg) {
 void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
     // disable features and publish command
     if (msg->linear.x != 0 || msg->angular.z != 0) {
-        canEscape = false;
-        canAvoid = false;
         canTurn = false;
         canDrive = false;
 	
@@ -274,8 +144,6 @@ void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
     }
     // enable features
     else {
-        canEscape = true;
-        canAvoid = true;
         canTurn = true;
         canDrive = true;
     }
@@ -295,8 +163,8 @@ void Explorer::turn() {
     turn_cmd.linear.x = 0;
     turn_cmd.linear.y = 0;
     
-    // run at 5Hz
-    ros::Rate loop_rate(5);    
+    // run at 10z
+    ros::Rate loop_rate(10);    
     while (ros::ok()) {        
         // make sure drive is enabled while not currently turning
         if (canTurn) {
@@ -335,8 +203,8 @@ void Explorer::drive() {
     move_cmd.linear.y = 0;
     move_cmd.angular.z = 0;
     
-    // run at 5Hz
-    ros::Rate loop_rate(5);
+    // run at 10Hz
+    ros::Rate loop_rate(10);
     
     // enters loop until ros quits
     while (ros::ok()) {
@@ -364,8 +232,7 @@ void Explorer::explore() {
     // create subscibers
     ros::Subscriber halt_sub = n->subscribe("mobile_base/events/bumper", 20, &Explorer::halt, this);
     ros::Subscriber keyboard_sub = n->subscribe("keyboard_controls", 100, &Explorer::keyboard, this);
-    ros::Subscriber escape_sub = n->subscribe("camera/depth/points", 2, &Explorer::escape, this);
-    ros::Subscriber avoid_sub = n->subscribe("camera/depth/points", 2, &Explorer::avoid, this);
+    ros::Subscriber escape_sub = n->subscribe("scan", 2, &Explorer::detect, this);
     // start threads
     boost::thread turn_thread(&Explorer::turn, this);
     boost::thread drive_thread(&Explorer::drive, this);

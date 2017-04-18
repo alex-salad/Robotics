@@ -9,8 +9,6 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   message_generation
-  pcl_conversions
-  pcl_ros
 )
 
 ################################################
@@ -34,8 +32,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES project1
-  CATKIN_DEPENDS geometry_msgs kobuki_msgs rospy roscpp std_msgs message_runtime 
-  pcl_conversion pcl_ros sensor_msgs
+  CATKIN_DEPENDS geometry_msgs kobuki_msgs rospy roscpp std_msgs message_runtime sensor_msgs
 #  DEPENDS system_lib
 )
 
