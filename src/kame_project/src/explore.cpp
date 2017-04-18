@@ -41,7 +41,7 @@ private:
     void halt(const kobuki_msgs::BumperEvent::ConstPtr &msg);
     void keyboard(const geometry_msgs::Twist::ConstPtr &msg);
     int detect(const sensor_msgs::LaserScanConstPtr &msg);
-    void avoid()
+    void avoid();
     void turn();
     void drive();
 
