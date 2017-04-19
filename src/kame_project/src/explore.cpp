@@ -111,7 +111,7 @@ void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
 * Publishes commands for rotating
 */
 void Explorer::rotate(double goal, double velocity, int condition) {
-    // the turn command
+    // the rotate command
     geometry_msgs::Twist rotate_cmd; 
     rotate_cmd.linear.x = 0;
     rotate_cmd.linear.y = 0;
@@ -160,7 +160,9 @@ void Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
         // if distance is on the right
         if (angle < 0) {
             right_min = (right_min < ranges[i]) ? right_min : ranges[i];
-        } else {
+        } 
+        // if distance is on the left
+        else if (angle > 0) {
             left_min = (left_min < ranges[i]) ? left_min : ranges[i];
         }
     }
@@ -169,8 +171,8 @@ void Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
     if (left_min > 1 + DELTA && right_min > 1 + DELTA) {
         ROS_INFO("NO OBSTACLE :)");
 
-        // if in escaping or avoidance state reset to driving
-        if (state == ESCAPING || state == AVOIDING) {
+        // stop avoiding if no obstacle
+        if (state == AVOIDING) {
             state = DRIVING;
         }
     }
@@ -182,6 +184,11 @@ void Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
             // change state and rotate
             state = ESCAPING;
             rotate(ESCAPE_ANGLE, ESCAPE_ANGLE / 3.0, ESCAPING);
+
+            // reset state after escaping
+            if (state == ESCAPING) {
+                state = DRIVING;
+            }
         }
     }
     // obstacle to the right
@@ -246,10 +253,11 @@ void Explorer::turn() {
 * Publishes commands for traveling in a straight line for one meter.
 */
 void Explorer::drive() {
-    // the move to be published: STRAIGHT ONLY
+    // the move to be published: FORWARD ONLY
     geometry_msgs::Twist move_cmd;
     move_cmd.linear.x = SPEED;
     move_cmd.linear.y = 0;
+    move_cmd.linear.z = 0;
     move_cmd.angular.z = 0;
     
     // run at 10Hz
@@ -305,7 +313,7 @@ void Explorer::explore() {
 // ========================================================
 
 /**
- * Initiates the node and explorer for well ... exlporation
+ * Initiates the node and explorer for well ... exlporing
  */
 int main (int argc, char **argv) {
     ros::init(argc, argv, "explore");
