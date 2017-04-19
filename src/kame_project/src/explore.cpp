@@ -144,26 +144,26 @@ void Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
         return;
     }
 
-    double[] ranges = msg->ranges;
     double left_min = 2.0;
     double right_min = 2.0;
 
     // get the minimum value for right and left sides
-    for (int i = 0; i < ranges.size(); i++) {
+    for (int i = 0; i < msg->ranges.size(); i++) {
+        double range = msg->ranges[i];
         // ignore invalid data
-        if (isnan(ranges[i]) || ranges[i] <= msg->range_min || ranges[i] >= msg->rang_max) {
+        if (isnan(range) || range <= msg->range_min || range >= msg->range_max) {
             continue;
         }
 
-        double angle = msg->min_angle + i * msg->angle_increment;
+        double angle = msg->angle_min + i * msg->angle_increment;
 
         // if distance is on the right
         if (angle < 0) {
-            right_min = (right_min < ranges[i]) ? right_min : ranges[i];
+            right_min = (right_min < range) ? right_min : range;
         } 
         // if distance is on the left
         else if (angle > 0) {
-            left_min = (left_min < ranges[i]) ? left_min : ranges[i];
+            left_min = (left_min < range) ? left_min : range;
         }
     }
 
