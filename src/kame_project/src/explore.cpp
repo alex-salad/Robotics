@@ -12,13 +12,13 @@
 #define TURN_ANGLE M_PI / 12
 #define ESCAPE_ANGLE M_PI * 5.0 / 6.0
 #define SPEED 0.2
-
-#define FRONT_OBSTACLE 0
-#define RIGHT_OBSTACLE 1
-#define LEFT_OBSTACLE 2
-#define NO_OBSTACLE -1
-
 #define DELTA 0.15
+
+#define DRIVING 0
+#define TURNING 1
+#define AVOIDING 2
+#define ESCAPING 3
+#define KEYBOARDING 4
 
 
 // ========================================================
@@ -32,16 +32,14 @@ private:
     // private variables
     ros::NodeHandle *n;
     ros::Publisher p;
-    bool canTurn;
-    bool canDrive;
+    int state;
     double distance_counter;
-    int cooldown;
 
     // private functions
     void halt(const kobuki_msgs::BumperEvent::ConstPtr &msg);
     void keyboard(const geometry_msgs::Twist::ConstPtr &msg);
-    int detect(const sensor_msgs::LaserScanConstPtr &msg);
-    void avoid();
+    void detect(const sensor_msgs::LaserScanConstPtr &msg);    
+    void rotate(double goal, double velocity, int condition);
     void turn();
     void drive();
 
@@ -56,14 +54,11 @@ public:
 // CONSTRUCTOR
 // ========================================================
 /**
-* initiates all the variables
+* initiates some things
 */
 Explorer::Explorer(ros::NodeHandle *n) {
     this->n = n;
-    p = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 10);
-    canTurn = true;
-    canDrive = true;
-    cooldown = 0;   
+    p = n->advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 10); 
 }
 
 // ========================================================
@@ -98,15 +93,42 @@ void Explorer::halt(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
 void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
     // disable features and publish command
     if (msg->linear.x != 0 || msg->angular.z != 0) {
-        canTurn = false;
-        canDrive = false;
+        state = KEYBOARDING;
+        // add to publishing queue
         p.publish(*msg);
     }
 
-    // enable features
+    // reset to driving
     else {
-        canTurn = true;
-        canDrive = true;
+        state = DRIVING;
+    }
+}
+
+// ========================================================
+// ROTATE FEATURE
+// ========================================================
+/**
+* Publishes commands for rotating
+*/
+void Explorer::rotate(double goal, double velocity, int condition) {
+    // the turn command
+    geometry_msgs::Twist rotate_cmd; 
+    rotate_cmd.linear.x = 0;
+    rotate_cmd.linear.y = 0;
+    rotate_cmd.linear.z = 0;
+    rotate_cmd.angular.z = velocity;
+
+    double current_angle = 0;
+    double start_time = ros::Time::now().toSec();
+    
+    // run at 10z
+    ros::Rate loop_rate(10);
+
+    // publish turn commands
+    while (ros::ok() && current_angle < goal && state == condition) {
+        p.publish(rotate_cmd);
+        current_angle =  fabs(velocity) * ((ros::Time::now().toSec()) - start_time);
+        loop_rate.sleep();
     }
 }
 
@@ -116,17 +138,24 @@ void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
 /**
 * Determines where the obstacle comes from
 */
-int Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
-    double[] ranges = msg->ranges;
-    double left_min = 1.0;
-    double right_min = 1.0;
+void Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
+    // do nothing if in a higher priority state or already escaping
+    if (state >= ESCAPING) {
+        return;
+    }
 
-    for (int i = 0; i < ranges.size() < i++) {
-        if (ranges[i] <= msg->range_min || ranges[i] >= msg->rang_max) {
+    double[] ranges = msg->ranges;
+    double left_min = 2.0;
+    double right_min = 2.0;
+
+    // get the minimum value for right and left sides
+    for (int i = 0; i < ranges.size(); i++) {
+        // ignore invalid data
+        if (isnan(ranges[i]) || ranges[i] <= msg->range_min || ranges[i] >= msg->rang_max) {
             continue;
         }
 
-        double angle = msg->min_anle + i * msg->angle_increment;
+        double angle = msg->min_angle + i * msg->angle_increment;
 
         // if distance is on the right
         if (angle < 0) {
@@ -136,37 +165,43 @@ int Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
         }
     }
 
+    // no obstacle
     if (left_min > 1 + DELTA && right_min > 1 + DELTA) {
         ROS_INFO("NO OBSTACLE :)");
-        return NO_OBSTACLE;
+
+        // if in escaping or avoidance state reset to driving
+        if (state == ESCAPING || state == AVOIDING) {
+            state = DRIVING;
+        }
     }
 
-    if (fabs(right_min - left_min) < DELTA) {
+    // obstacle to the front
+    else if (fabs(right_min - left_min) < DELTA) {
         ROS_INFO("OBSTACLE DETECTED AT FRONT!");
-        return FRONT_OBSTACLE;
+        if (state < ESCAPING) {
+            // change state and rotate
+            state = ESCAPING;
+            rotate(ESCAPE_ANGLE, ESCAPE_ANGLE / 3.0, ESCAPING);
+        }
     }
-
+    // obstacle to the right
     else if (right_min < left_min) {
         ROS_INFO("OBSTACLE DETECTED AT RIGHT!");
-        return RIGHT_OBSTACLE;
+        if (state <= AVOIDING) {
+            // change state and rotate
+            state = AVOIDING;
+            rotate(TURN_ANGLE, TURN_ANGLE, AVOIDING);
+        }
     }
-
+    // obstacle to the left
     else {
         ROS_INFO("OBSTACLE DETECTED AT LEFT!");
-        return LEFT_OBSTACLE;
+        if (state <= AVOIDING) {
+            // change state and rotate
+            state = AVOIDING;
+            rotate(TURN_ANGLE, -1 * TURN_ANGLE, AVOIDING);
+        }
     }
-
-    return NO_OBSTACLE;
-}
-
-// ========================================================
-// AVOID FEATURE
-// ========================================================
-/**
-* Determines where the obstacle comes from
-*/
-int Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
-    int status = detect(msg);
 }
 
 // ========================================================
@@ -176,42 +211,30 @@ int Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
 * Publishes commands for rotating 15 degrees in a random direction.
 * Commands are published whenever 1 meter has approximately been traveled.
 */
-void Explorer::turn() {
-    // the turn command
-    geometry_msgs::Twist turn_cmd;
-    double angular_vel = TURN_ANGLE;    
-    turn_cmd.linear.x = 0;
-    turn_cmd.linear.y = 0;
-    
+void Explorer::turn() {    
     // run at 10z
     ros::Rate loop_rate(10);
 
     // loop until ros quits
     while (ros::ok()) {        
         // make sure drive is enabled while not currently turning
-        if (canTurn) {
-            canDrive = true;
+        if (state == TURNING) {
+            state = DRIVING;
         }
 
         // check if it is time to turn
-        if (distance_counter >= 1 && canTurn) {
-            // shut off driving
-            canDrive = false;
-            double current_angle = 0;
-            double start_time = ros::Time::now().toSec();
+        if (distance_counter >= 1 && state == DRIVING) {
+            // change state
+            state = TURNING;
 
             // get a random direction for turning
-            turn_cmd.angular.z = (rand() % 2) ? angular_vel : -1 * angular_vel;
+            double angular_vel = (rand() % 2) ? TURN_ANGLE : -1 * TURN_ANGLE;
+            rotate(TURN_ANGLE, angular_vel, TURNING);
 
-            // publish turn commands
-            while (ros::ok() && canTurn && current_angle < TURN_ANGLE) {
-                p.publish(turn_cmd);
-                current_angle =  angular_vel * ((ros::Time::now().toSec()) - start_time);
-                loop_rate.sleep();
-            }
             // reset distance counter
             distance_counter = 0;
         }
+
         loop_rate.sleep();
     }
 }
@@ -238,7 +261,7 @@ void Explorer::drive() {
         double current_distance = 0;
 
         // publishes command for moving 1 meter at a time
-        while (ros::ok() && canDrive && current_distance < 1) {
+        while (ros::ok() && state == DRIVING && current_distance < 1 - distance_counter) {
             p.publish(move_cmd);
             current_distance = SPEED * (ros::Time::now().toSec() - start_time);
             loop_rate.sleep();
@@ -259,8 +282,8 @@ void Explorer::drive() {
 void Explorer::explore() {
     // create subscibers
     ros::Subscriber halt_sub = n->subscribe("mobile_base/events/bumper", 20, &Explorer::halt, this);
-    ros::Subscriber keyboard_sub = n->subscribe("keyboard_controls", 100, &Explorer::keyboard, this);
-    ros::Subscriber avoid_sub = n->subscribe("scan", 2, &Explorer::avoid, this);
+    ros::Subscriber keyboard_sub = n->subscribe("keyboard_controls", 10, &Explorer::keyboard, this);
+    ros::Subscriber detect_sub = n->subscribe("scan", 2, &Explorer::detect, this);
 
     // start threads
     boost::thread turn_thread(&Explorer::turn, this);
@@ -269,6 +292,9 @@ void Explorer::explore() {
     // detach threads
     turn_thread.detach();
     drive_thread.detach();
+
+    // put into driving state
+    state = DRIVING;
 
     // spin away
     ros::spin();
