@@ -1,6 +1,6 @@
 <launch>
     <!-- CREATE THE NODE FOR EXPLORE -->
-    <node pkg="kame_project" name="explore" type="explore"/>
+    <node pkg="kame_project" name="explore" type="explore" required="true" output="screen"/>
 
     <!-- ALLOW MAPPING -->   
     <!-- <include file="$(find turtlebot_navigation)/launch/includes/gmapping/gmapping.launch.xml"/>

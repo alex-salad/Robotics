@@ -179,7 +179,7 @@ void Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
 
     // obstacle to the front
     else if (fabs(right_min - left_min) < DELTA) {
-        ROS_INFO("OBSTACLE DETECTED AT FRONT!");
+        ROS_INFO("OBSTACLE DETECTED AT FRONT! (^_^)");
         if (state < ESCAPING) {
             // change state and rotate
             state = ESCAPING;
@@ -193,20 +193,20 @@ void Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
     }
     // obstacle to the right
     else if (right_min < left_min) {
-        ROS_INFO("OBSTACLE DETECTED AT RIGHT!");
+        ROS_INFO("OBSTACLE DETECTED AT STARBOARD! (^_~)");
         if (state <= AVOIDING) {
             // change state and rotate
             state = AVOIDING;
-            rotate(TURN_ANGLE, TURN_ANGLE, AVOIDING);
+            rotate(TURN_ANGLE, TURN_ANGLE * 1.5, AVOIDING);
         }
     }
     // obstacle to the left
     else {
-        ROS_INFO("OBSTACLE DETECTED AT LEFT!");
+        ROS_INFO("OBSTACLE DETECTED AT PORT! (~_^)");
         if (state <= AVOIDING) {
             // change state and rotate
             state = AVOIDING;
-            rotate(TURN_ANGLE, -1 * TURN_ANGLE, AVOIDING);
+            rotate(TURN_ANGLE, -1.5 * TURN_ANGLE, AVOIDING);
         }
     }
 }
