@@ -12,7 +12,7 @@
 #define TURN_ANGLE M_PI / 12
 #define ESCAPE_ANGLE M_PI * 5.0 / 6.0
 #define SPEED 0.2
-#define DELTA 0.15
+#define DELTA 0.1
 
 #define DRIVING 0
 #define TURNING 1
@@ -87,7 +87,7 @@ void Explorer::halt(const kobuki_msgs::BumperEvent::ConstPtr &msg) {
 // KEYBOARD FEATURE
 // ========================================================
 /**
-* Disables other features to enable somewhat uninterupted control
+* Disables other features to enable uninterupted control
 * Enables feautes when no keyboard input that moves
 */
 void Explorer::keyboard(const geometry_msgs::Twist::ConstPtr &msg) {
@@ -136,7 +136,7 @@ void Explorer::rotate(double goal, double velocity, int condition) {
 // DETECT FEATURE
 // ========================================================
 /**
-* Determines where the obstacle comes from
+* Determines where the obstacle comes from and uses the appropriate avoidance move
 */
 void Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
     // do nothing if in a higher priority state or already escaping
@@ -215,8 +215,7 @@ void Explorer::detect(const sensor_msgs::LaserScanConstPtr &msg) {
 // TURN FEATURE
 // ========================================================
 /**
-* Publishes commands for rotating 15 degrees in a random direction.
-* Commands are published whenever 1 meter has approximately been traveled.
+* Determines when to turn and chooses a random direction
 */
 void Explorer::turn() {    
     // run at 10z
