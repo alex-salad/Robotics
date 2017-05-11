@@ -307,6 +307,25 @@ void Explorer::explore() {
     ros::spin();
 }
 
+//=========================================================
+// LOCATE-AND-GO METHOD
+//=========================================================
+/**
+ * what is programming; also finds shortest route between two points
+ */
+ void Explorer::locateandgo(double[] coordlist) {
+	 // man, I don't know how to code, bro.
+	 // somehow figure out current location
+	 // probably rotate 360 and plop itself in the model based on
+	 //    what it can see.
+	 // for loop: check xy dist from current position to coordlist
+	 // probably sort that list from shortest to longest
+	 // probably go and let avoid() handle local avoidance lolol
+	 // probably get there and resort the list based on distance
+	 // in the end this algorithm might be too simple...
+ }
+
+
 // ========================================================
 // MAIN METHOD
 // ========================================================
