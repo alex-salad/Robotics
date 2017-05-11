@@ -57,4 +57,7 @@
   </include>
   
   <include file="$(find turtlebot_rviz_launchers)/launch/view_navigation.launch"/>
+  
+  <!-- Tour Program Node -->
+  <node name="tour" pkg="kame_project" type="tour" />
 </launch>
