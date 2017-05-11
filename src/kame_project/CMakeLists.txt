@@ -7,7 +7,9 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   rospy
   roscpp
+  actionlib
   std_msgs
+  move_base_msgs
   message_generation
 )
 
@@ -22,6 +24,7 @@ generate_messages(
    geometry_msgs
    kobuki_msgs
    std_msgs
+   move_base_msgs
    sensor_msgs
 )
 
@@ -32,7 +35,15 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES project1
-  CATKIN_DEPENDS geometry_msgs kobuki_msgs rospy roscpp std_msgs message_runtime sensor_msgs
+  CATKIN_DEPENDS
+  geometry_msgs
+  kobuki_msgs
+  rospy
+  roscpp
+  std_msgs
+  message_runtime
+  sensor_msgs
+  actionlib
 #  DEPENDS system_lib
 )
 
@@ -46,5 +57,9 @@ include_directories(
 
 add_executable(explore src/explore.cpp)
 target_link_libraries(explore ${catkin_LIBRARIES})
-add_dependencies(explore project1_generate_messages_cpp)
+add_dependencies(explore kame_project_generate_messages_cpp)
+
+add_executable(tour src/tour.cpp)
+target_link_libraries(tour ${catkin_LIBRARIES})
+add_dependencies(tour kame_project_generate_messages_cpp)
 
