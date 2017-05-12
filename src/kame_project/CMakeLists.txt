@@ -59,7 +59,3 @@ add_executable(explore src/explore.cpp)
 target_link_libraries(explore ${catkin_LIBRARIES})
 add_dependencies(explore kame_project_generate_messages_cpp)
 
-add_executable(tour src/tour.cpp)
-target_link_libraries(tour ${catkin_LIBRARIES})
-add_dependencies(tour kame_project_generate_messages_cpp)
-
