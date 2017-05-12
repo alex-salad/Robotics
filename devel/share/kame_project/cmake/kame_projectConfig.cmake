@@ -153,7 +153,7 @@ foreach(t ${kame_project_EXPORTED_TARGETS})
   endif()
 endforeach()
 
-set(depends "geometry_msgs;kobuki_msgs;rospy;roscpp;std_msgs;message_runtime;pcl_conversion;pcl_ros;sensor_msgs")
+set(depends "geometry_msgs;kobuki_msgs;rospy;roscpp;std_msgs;message_runtime;sensor_msgs;actionlib")
 foreach(depend ${depends})
   string(REPLACE " " ";" depend_list ${depend})
   # the package name of the dependency must be kept in a unique variable so that it is not overwritten in recursive calls
