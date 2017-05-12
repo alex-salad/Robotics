@@ -2,6 +2,7 @@
 
 import rospy
 import actionlib
+from actionlib_msgs.msg import *
 from geometry_msgs.msg import PoseWithCovarianceStamped, Point
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 import itertools
@@ -44,7 +45,7 @@ def get_shortest_path(x,y):
 def localize(msg):
     position[0] = msg.pose.pose.position.x
     position[1] = msg.pose.pose.position.y
-    rospy.loginfo('position updated: x = %f, y = %f', position[0], position[1])
+    # rospy.loginfo('position updated: x = %f, y = %f', position[0], position[1])
 
 def main():
     # setup the node and subscriber.
@@ -54,11 +55,11 @@ def main():
     
     # Loops for user input
     while not rospy.is_shutdown():
-        user = input('Start the tour? (y/n)').lower()
+        user = raw_input('Start the tour? (y/n): ').lower()
         # the yes option
         if user == 'y':
             print('Thank you for joining us today. Pleas wait for us to get the tour ready :o')
-            path = get_shortest_path(origin[0], origin[1])
+            path = get_shortest_path(position[0], position[1])
             rospy.sleep(1.0)
                         
             # set up for sending goals
@@ -84,20 +85,23 @@ def main():
                 rospy.loginfo("Sending goal location ...")
                 client.send_goal(goal)
                 
-                if(ac.get_state() ==  GoalStatus.SUCCEEDED):
-                    print('here we have [insert location name] which is [insert location desc] :P')
+                client.wait_for_result()
+                
+                if(client.get_state() ==  GoalStatus.SUCCEEDED):
                     rospy.loginfo("You have reached the destination")
+                    print('here we have [insert location name] which is [insert location desc] :P')
 
                 else:
                     rospy.loginfo("The robot failed to reach the destination")
                     break
+                    
             print('This concludes our tour :D')
                 
         # the no option
         else:
             print("Have a nice day (^_^) (Ctrl + C to quit)")
             rospy.loginfo("node is gonna die!")
-            rospy.sleep()
+            rospy.sleep(10.0)
     
 
 

@@ -3,6 +3,7 @@
 - Alex Salazar
 - Nicholas Von Busch
 - Tyler Woodfin
+- Koby Pascual
 
 # To Run (Project 1)
 - Clone or download repository and change into that directory.
@@ -16,7 +17,13 @@
 - Execute the following command: `catkin_make`
 - Then execute the following command: `source devel/setup.bash`
 - SSH into turtlebot and roslaunch the minimual bringup and 3d bringup
-- In a new terminal, execute the following command; `roslaunch kame_project project2.launch`
+- In a new terminal, execute the following command: `roslaunch kame_project project2.launch`
+
+# To Run (Tour Project)
+- Clone or download repository and change into that directory.
+- Then execute the following command: `source devel/setup.bash`
+- Execute the following command: `roslaunch kame_project tour.launch` this sets up the world, map and rviz
+- In a new terminal repeat step 2, then execute: `rosrun kame_project tour.py`
 
 # Troubleshooting
 Please ensure:
